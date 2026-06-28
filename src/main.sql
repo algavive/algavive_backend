@@ -4,7 +4,8 @@ CREATE TABLE IF NOT EXISTS users (
   pass_hash TEXT NULL,
   google_id TEXT UNIQUE NULL,
   username TEXT,
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL,
+  meta TEXT DEFAULT '{}'
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_login ON users(login);
