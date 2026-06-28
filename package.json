@@ -1,0 +1,20 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "wrangler dev",
+    "dev": "wrangler dev src/index.ts",
+    "deploy": "wrangler deploy",
+    "il-db": "wrangler d1 execute algavive-db --file=src/main.sql --local",
+    "rl-db": "cd .wrangler/state/v3/d1/miniflare-D1DatabaseObject & del *.sqlite"
+  },
+  "dependencies": {
+    "hono": "^4.6.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241230.0",
+    "wrangler": "^3.100.0",
+    "typescript": "^5.7.0"
+  }
+}
