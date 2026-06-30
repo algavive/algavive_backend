@@ -4,7 +4,8 @@ CREATE TABLE users (
   pass_hash TEXT,
   google_id TEXT UNIQUE,
   username TEXT,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX idx_users_login ON users(login);

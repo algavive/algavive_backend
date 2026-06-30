@@ -8,25 +8,16 @@ SCHEMA_FILE=src/schema.sql
 
 DEV_DB = sqlite://file?mode=memory
 
-.PHONY: all apply diff status fmt help
-applyaa:
-	atlas schema apply \
-	--url "sqlite://$(DB_LOCATION)/$(DB_FILE)" \
-	--to "file://$(SCHEMA_FILE)" \
-	--dev-url "$(DEV_DB)"  \
-	--auto-approve
+INJECT_SCHEMA = src/generated/execute.sql
 
-apply:
-	atlas schema apply \
-	  --url "sqlite://$(DB_LOCATION)/$(DB_FILE)" \
-	  --to "file://$(SCHEMA_FILE)" \
-	  --dev-url "$(DEV_DB)" 
+.PHONY: all diff status fmt help
 
 diff:
 	atlas schema diff \
 	  --from "sqlite://$(DB_LOCATION)/$(DB_FILE)" \
 	  --to "file://$(SCHEMA_FILE)" \
-	  --dev-url "$(DEV_DB)"
+	  --dev-url "$(DEV_DB)" \
+	  --format "{{ sql . }}" > $(INJECT_SCHEMA)
 
 status:
 	atlas schema inspect \
@@ -39,4 +30,4 @@ fmt:
 clean:
 	rm -rf .atlas
 
-all: applyaa
+all: diff

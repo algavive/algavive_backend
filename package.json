@@ -8,7 +8,8 @@
     "deploy": "wrangler deploy",
 
     "db:reset": "rmdir /s /q .wrangler",
-    "db:execute": "wrangler d1 execute algavive-db --local --command=\"SELECT 1;\""
+    "db:create-db": "wrangler d1 execute algavive-db --local --command=\"SELECT 1;\"",
+    "db:execute": "wrangler d1 execute algavive-db --local --file=src/generated/execute.sql"
   },
   "dependencies": {
     "hono": "^4.6.0"
