@@ -7,13 +7,8 @@
     "dev": "wrangler dev src/index.ts",
     "deploy": "wrangler deploy",
 
-    "migrate:create": "wrangler d1 migrations create algavive-db",
-    "migrate:local": "wrangler d1 migrations apply algavive-db --local",
-    "migrate:remote": "wrangler d1 migrations apply algavive-db --remote",
-    "migrate:status": "wrangler d1 migrations list algavive-db --local",
-
     "db:reset": "rmdir /s /q .wrangler",
-    "db:test": "wrangler d1 execute algavive-db --file=src/tests.sql --local"
+    "db:execute": "wrangler d1 execute algavive-db --local --command=\"SELECT 1;\""
   },
   "dependencies": {
     "hono": "^4.6.0"

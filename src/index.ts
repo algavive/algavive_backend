@@ -2,6 +2,8 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { authRoutes } from './routes/auth'
 
+//тестовый ключ капчи: 1x0000000000000000000000000000000AA
+
 type Bindings = {
   DB: D1Database
   TURNSTILE_SECRET: string
