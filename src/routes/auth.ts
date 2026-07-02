@@ -37,7 +37,7 @@ async function verifyGoogleToken(token: string) {
   return data
 }
 
-export function authRoutes(app: Hono) {
+export function auth(app: Hono) {
   app.post('/api/register', async (c) => {
     try {
       const { login, pass, turnstileToken } = await c.req.json()
@@ -105,32 +105,6 @@ export function authRoutes(app: Hono) {
   app.post('/api/logout', async (c) => {
     clearAuthCookie(c)
     return c.json({ success: true })
-  })
-
-  app.get('/api/me', async (c) => {
-  try {
-    const token = getTokenFromCookie(c)
-    if (!token) {
-      return c.json({ error: 'Unauthorized' }, 401)
-    }
-    const payload = await verify(token, c.env.JWT_SECRET, JWT_ALG)
-    const user = await c.env.DB.prepare(
-      'SELECT id, username, google_id, created_at FROM users WHERE id = ?'
-    ).bind(payload.id).first()
-    if (!user) {
-      return c.json({ error: 'User not found' }, 404)
-    }
-    return c.json({ 
-      user: {
-        id: user.id,
-        username: user.username,
-        hasGoogle: user.google_id !== null,
-        created_at: user.created_at
-      }
-    })
-  } catch (error) {
-    return c.json({ error: 'Invalid token' }, 401)
-  }
   })
 
   app.post('/api/auth/google', async (c) => {
@@ -250,23 +224,5 @@ export function authRoutes(app: Hono) {
     console.error(error)
     return c.json({ error: 'Failed to link Google' }, 500)
   }
-  })
-
-  app.post("/api/change/username", async(c) => {
-    const {username} = await c.req.json()
-
-    const token = getTokenFromCookie(c)
-    if (!token) {
-      return c.json({ error: 'Unauthorized' }, 401)
-    }
-    if (username.length < 3 || username.length > 30) {
-      return c.json({ error: 'Username должен быть от 3 до 30 символов' }, 400)
-    }
-    const payload = await verify(token, c.env.JWT_SECRET, JWT_ALG)
-    await c.env.DB.prepare(
-      'UPDATE users SET username = ? WHERE id = ?'
-    ).bind(username, payload.id).run()
-
-    return c.json({ success: true }, 200)
   })
 }

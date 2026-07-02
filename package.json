@@ -9,7 +9,8 @@
 
     "db:reset": "rmdir /s /q .wrangler",
     "db:create-db": "wrangler d1 execute algavive-db --local --command=\"SELECT 1;\"",
-    "db:execute": "wrangler d1 execute algavive-db --local --file=src/generated/execute.sql"
+    "db:execute": "wrangler d1 execute algavive-db --local --file=src/generated/execute.sql",
+    "db:make": "make & wrangler d1 execute algavive-db --local --file=src/generated/execute.sql"
   },
   "dependencies": {
     "hono": "^4.6.0"

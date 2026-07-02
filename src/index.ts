@@ -1,7 +1,9 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
-import { authRoutes } from './routes/auth'
-
+import { auth } from './routes/auth'
+import { my_profile } from './routes/my_profile'
+import { my_projects } from './routes/my_projects'
+import { project } from './routes/project'
 //тестовый ключ капчи: 1x0000000000000000000000000000000AA
 
 type Bindings = {
@@ -24,11 +26,13 @@ app.use('*', cors({
     const BACKDEV_MODE = url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '0.0.0.0'
     return FRONTEND_URL(BACKDEV_MODE)
   },
-  allowMethods: ['POST', 'GET', 'OPTIONS', 'PUT'],
   allowHeaders: ['Content-Type'],
   credentials: true
 }))
 
-authRoutes(app)
+auth(app)
+my_profile(app)
+my_projects(app)
+project(app)
 
 export default app

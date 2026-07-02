@@ -1,0 +1,25 @@
+import { Hono } from 'hono'
+import { sha256 } from 'hono/utils/crypto'
+import { sign, verify } from 'hono/jwt'
+
+const JWT_ALG = 'HS256'
+
+export async function verifyCookie(token: string, c: any){
+  return await verify(token, c.env.JWT_SECRET, JWT_ALG)
+}
+
+export function getTokenFromCookie(c: any): string | null {
+  const cookie = c.req.header('Cookie')
+  if (!cookie) return null
+  const match = cookie.split(';').find(c => c.trim().startsWith('token='))
+  if (!match) return null
+  return match.split('=')[1].trim()
+}
+
+export function setAuthCookie(c: any, token: string) {
+  c.header('Set-Cookie', `token=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=2592000`)
+}
+
+export function clearAuthCookie(c: any) {
+  c.header('Set-Cookie', 'token=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0')
+}
