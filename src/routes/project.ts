@@ -285,6 +285,7 @@ app.put('/api/project/:id', async (c) => {
     const id = parseInt(c.req.param('id'))
     const { title, description, content, imageUrl } = await c.req.json()
 
+    if (content.length > 256) { return c.json({ error: 'Ссылка контента не должно быть меньше 256 символов' }, 400) }
     await c.env.DB.prepare(
       `UPDATE projects SET content = COALESCE(?, content) ...`
     ).bind(content || null)
@@ -298,6 +299,9 @@ app.put('/api/project/:id', async (c) => {
     if (project.user_id !== payload.id && !(payload.admin === 1 || payload.admin === 2)) {
       return c.json({ error: 'Forbidden' }, 403)
     }
+    if (description.length > 1024) { return c.json({ error: 'Описание не должно быть меньше 1024 символов' }, 400) }
+    if (title.length > 128) { return c.json({ error: 'Название не должно быть меньше 128 символов' }, 400) }
+    if (imageUrl.length > 256) { return c.json({ error: 'Ссылка не должно быть меньше 256 символов' }, 400) }
 
     await c.env.DB.prepare(
       `UPDATE projects SET 
@@ -367,10 +371,6 @@ app.put('/api/project/:id', async (c) => {
       const user = await c.env.DB.prepare(
         'SELECT * FROM users WHERE id = ?'
       ).bind(payload.id).first()
-
-      if (!(user?.admin === 1 || user?.admin === 2)) {
-        return c.json({ error: 'Forbidden' }, 403)
-      }
 
       await c.env.DB.prepare(
         'UPDATE projects SET is_published = 1, is_trends = 1 WHERE id = ?'

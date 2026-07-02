@@ -10,7 +10,7 @@ export function my_profile(app: Hono) {
     	}
     	const payload = await verifyCookie(token, c)
     	const user = await c.env.DB.prepare(
-      	'SELECT id, username, google_id, created_at, description, avatarUrl FROM users WHERE id = ?'
+      	'SELECT id, username, google_id, created_at, description, avatarUrl, admin FROM users WHERE id = ?'
     	).bind(payload.id).first()
     	if (!user) {
       	return c.json({ error: 'User not found' }, 404)
@@ -22,7 +22,8 @@ export function my_profile(app: Hono) {
         	hasGoogle: user.google_id !== null,
         	created_at: user.created_at,
         	description: user.description,
-        	avatarUrl: user.avatarUrl
+        	avatarUrl: user.avatarUrl,
+        	admin: user.admin
       	}
     	})
   	} catch (error) {

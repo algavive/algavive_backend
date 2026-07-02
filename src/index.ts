@@ -1,9 +1,14 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { auth } from './routes/auth'
+
 import { my_profile } from './routes/my_profile'
 import { my_projects } from './routes/my_projects'
 import { project } from './routes/project'
+import { search } from './routes/search'
+import { projects } from './routes/projects'
+import { user } from './routes/user'
+
 //тестовый ключ капчи: 1x0000000000000000000000000000000AA
 
 type Bindings = {
@@ -34,5 +39,8 @@ auth(app)
 my_profile(app)
 my_projects(app)
 project(app)
+search(app)
+projects(app)
+user(app)
 
 export default app

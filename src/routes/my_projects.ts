@@ -13,14 +13,14 @@ export function my_projects(app: Hono) {
     	if (!token) {
       	return c.json({ error: 'Unauthorized' }, 401)
     	}
-    	if (title.length < 1 || title.length > 64) {
-      		return c.json({ error: 'title должен быть от 1 до 64 символов' }, 400)
+    	if (title.length < 1 || title.length > 128) {
+      		return c.json({ error: 'title должен быть от 1 до 128 символов' }, 400)
     	}
       	if (!validTypes.includes(type)) {
         	return c.json({ error: 'Неверный тип проекта' }, 400)
       	}
-      	if (imageUrl && (imageUrl.length < 1 || imageUrl.length > 128)) {
-  			return c.json({ error: 'imageUrl должен быть от 1 до 128 символов' }, 400)
+      	if (imageUrl && (imageUrl.length < 1 || imageUrl.length > 256)) {
+  			return c.json({ error: 'imageUrl должен быть от 1 до 256 символов' }, 400)
 		}
     	const payload = await verifyCookie(token, c)
     	const result = await c.env.DB.prepare(
