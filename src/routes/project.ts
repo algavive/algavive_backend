@@ -25,7 +25,8 @@ export function project(app: Hono) {
           u.userTitle as authorTitle,
           p.likes_count as likes,
           p.comments_count as comments,
-          p.views_count as views
+          p.views_count as views,
+          p.is_published as is_published
         FROM projects p
         LEFT JOIN users u ON p.user_id = u.id
         WHERE p.id = ?`
@@ -81,7 +82,12 @@ export function project(app: Hono) {
 
       const payload = await verifyCookie(token, c)
       const id = parseInt(c.req.param('id'))
-
+      const project = await c.env.DB.prepare(
+        'SELECT user_id FROM projects WHERE id = ?'
+      ).bind(id).first()
+      if (project.user_id === payload.id) {
+        return c.json({ error: 'You cannot like your own project' }, 403)
+      }
       const existing = await c.env.DB.prepare(
         'SELECT * FROM likes WHERE projects_id = ? AND user_id = ?'
       ).bind(id, payload.id).first()
@@ -122,6 +128,10 @@ export function project(app: Hono) {
         return c.json({ error: 'Comment content is required' }, 400)
       }
 
+      if (content.length > 300) {
+        return c.json({ error: 'Комментарий не может быть больше 300 символов' }, 400)
+      }
+
       const result = await c.env.DB.prepare(
         `INSERT INTO comments (project_id, user_id, content, is_reply) VALUES (?, ?, ?, ?)`
       ).bind(id, payload.id, content.trim(), 0).run()
@@ -149,45 +159,129 @@ export function project(app: Hono) {
     }
   })
 
-  app.get('/api/project/:id/comments', async (c) => {
-    try {
-      const id = parseInt(c.req.param('id'))
+app.get('/api/project/:id/comments', async (c) => {
+  try {
+    const id = parseInt(c.req.param('id'))
+    const page = parseInt(c.req.query('page') || '1')
+    const limit = parseInt(c.req.query('limit') || '20')
+    const replyLimit = parseInt(c.req.query('replyLimit') || '5')
+    const offset = (page - 1) * limit
 
-      const comments = await c.env.DB.prepare(
+    const comments = await c.env.DB.prepare(
+      `SELECT 
+        c.*,
+        u.username as author,
+        u.avatarUrl as authorProfile,
+        u.userIcon as authorIcon,
+        u.userTitle as authorTitle
+      FROM comments c
+      LEFT JOIN users u ON c.user_id = u.id
+      WHERE c.project_id = ? AND c.is_reply = 0
+      ORDER BY c.created_at DESC
+      LIMIT ? OFFSET ?`
+    ).bind(id, limit, offset).all()
+
+    const commentsWithReplies = await Promise.all((comments.results || []).map(async (comment: any) => {
+      const replies = await c.env.DB.prepare(
         `SELECT 
-          c.*,
+          r.*,
           u.username as author,
           u.avatarUrl as authorProfile,
-          u.userIcon as rankIcon,
-          u.userTitle as rankTitle
-        FROM comments c
-        LEFT JOIN users u ON c.user_id = u.id
-        WHERE c.project_id = ? AND c.is_reply = 0
-        ORDER BY c.created_at ASC`
-      ).bind(id).all()
+          u.userIcon as authorIcon,
+          u.userTitle as authorTitle
+        FROM comments r
+        LEFT JOIN users u ON r.user_id = u.id
+        WHERE r.reply_id = ?
+        ORDER BY r.created_at DESC
+        LIMIT ?`
+      ).bind(comment.id, replyLimit).all()
+      const totalReplies = await c.env.DB.prepare(
+        'SELECT COUNT(*) as count FROM comments WHERE reply_id = ?'
+      ).bind(comment.id).first()
+      return { 
+        ...comment, 
+        replies: replies.results || [],
+        totalReplies: totalReplies?.count || 0 
+      }
+    }))
 
-      const commentsWithReplies = await Promise.all((comments.results || []).map(async (comment: any) => {
-        const replies = await c.env.DB.prepare(
-          `SELECT 
-            r.*,
-            u.username as author,
-            u.avatarUrl as authorProfile,
-            u.userIcon as rankIcon,
-            u.userTitle as rankTitle
-          FROM comments r
-          LEFT JOIN users u ON r.user_id = u.id
-          WHERE r.reply_id = ?
-          ORDER BY r.created_at ASC`
-        ).bind(comment.id).all()
-        return { ...comment, replies: replies.results || [] }
-      }))
+    const total = await c.env.DB.prepare(
+      'SELECT COUNT(*) as count FROM comments WHERE project_id = ? AND is_reply = 0'
+    ).bind(id).first()
 
-      return c.json({ comments: commentsWithReplies })
-    } catch (error) {
-      console.error(error)
-      return c.json({ error: 'Failed to load comments' }, 500)
-    }
-  })
+    return c.json({
+      comments: commentsWithReplies,
+      total: total?.count || 0,
+      page,
+      limit,
+      totalPages: Math.ceil((total?.count || 0) / limit)
+    })
+  } catch (error) {
+    console.error(error)
+    return c.json({ error: 'Failed to load comments' }, 500)
+  }
+})
+
+app.get('/api/comments/:id/replies', async (c) => {
+  try {
+    const commentId = parseInt(c.req.param('id'))
+    const page = parseInt(c.req.query('page') || '1')
+    const limit = parseInt(c.req.query('limit') || '5')
+    const offset = (page - 1) * limit
+
+    const replies = await c.env.DB.prepare(
+      `SELECT 
+        r.*,
+        u.username as author,
+        u.avatarUrl as authorProfile,
+        u.userIcon as authorIcon,
+        u.userTitle as authorTitle
+      FROM comments r
+      LEFT JOIN users u ON r.user_id = u.id
+      WHERE r.reply_id = ?
+      ORDER BY r.created_at DESC
+      LIMIT ? OFFSET ?`
+    ).bind(commentId, limit, offset).all()
+
+    const total = await c.env.DB.prepare(
+      'SELECT COUNT(*) as count FROM comments WHERE reply_id = ?'
+    ).bind(commentId).first()
+
+    return c.json({
+      replies: replies.results || [],
+      total: total?.count || 0,
+      page,
+      limit,
+      totalPages: Math.ceil((total?.count || 0) / limit)
+    })
+  } catch (error) {
+    console.error(error)
+    return c.json({ error: 'Failed to load replies' }, 500)
+  }
+})
+
+/*
+app.get('/api/comments/:id/replies/all', async (c) => {
+  try {
+    const id = parseInt(c.req.param('id'))
+    const replies = await c.env.DB.prepare(
+      `SELECT 
+        r.*,
+        u.username as author,
+        u.avatarUrl as authorProfile,
+        u.userIcon as authorIcon,
+        u.userTitle as authorTitle
+      FROM comments r
+      LEFT JOIN users u ON r.user_id = u.id
+      WHERE r.reply_id = ?
+      ORDER BY r.created_at ASC`
+    ).bind(id).all()
+    return c.json({ replies: replies.results || [] })
+  } catch (error) {
+    console.error(error)
+    return c.json({ error: 'Failed to load replies' }, 500)
+  }
+})*/
 
   app.delete('/api/comments/:id', async (c) => {
     try {
@@ -241,6 +335,9 @@ export function project(app: Hono) {
       if (!content || content.trim().length === 0) {
         return c.json({ error: 'Reply content is required' }, 400)
       }
+      if (content.length > 300) {
+        return c.json({ error: 'Ответ на комментарий не может быть больше 300 символов' }, 400)
+      }
 
       const parent = await c.env.DB.prepare(
         'SELECT * FROM comments WHERE id = ?'
@@ -285,11 +382,6 @@ app.put('/api/project/:id', async (c) => {
     const id = parseInt(c.req.param('id'))
     const { title, description, content, imageUrl } = await c.req.json()
 
-    if (content.length > 256) { return c.json({ error: 'Ссылка контента не должно быть меньше 256 символов' }, 400) }
-    await c.env.DB.prepare(
-      `UPDATE projects SET content = COALESCE(?, content) ...`
-    ).bind(content || null)
-
     const project = await c.env.DB.prepare(
       'SELECT * FROM projects WHERE id = ?'
     ).bind(id).first()
@@ -299,9 +391,29 @@ app.put('/api/project/:id', async (c) => {
     if (project.user_id !== payload.id && !(payload.admin === 1 || payload.admin === 2)) {
       return c.json({ error: 'Forbidden' }, 403)
     }
-    if (description.length > 1024) { return c.json({ error: 'Описание не должно быть меньше 1024 символов' }, 400) }
-    if (title.length > 128) { return c.json({ error: 'Название не должно быть меньше 128 символов' }, 400) }
-    if (imageUrl.length > 256) { return c.json({ error: 'Ссылка не должно быть меньше 256 символов' }, 400) }
+
+    let finalContent = content
+
+    if (content !== undefined && content !== null) {
+      if (typeof content === 'string') {
+        if (content.length > 256) {
+          return c.json({ error: 'Content must be less than 256 characters' }, 400)
+        }
+        finalContent = content
+      } else if (Array.isArray(content)) {
+        if (content.length > 10) {
+          return c.json({ error: 'Maximum 10 media files allowed' }, 400)
+        }
+        for (const item of content) {
+          if (typeof item === 'string' && item.length > 256) {
+            return c.json({ error: 'Each media URL must be less than 256 characters' }, 400)
+          }
+        }
+        finalContent = JSON.stringify(content)
+      } else {
+        return c.json({ error: 'Invalid content format' }, 400)
+      }
+    }
 
     await c.env.DB.prepare(
       `UPDATE projects SET 
@@ -314,12 +426,16 @@ app.put('/api/project/:id', async (c) => {
     ).bind(
       title || null,
       description || null,
-      content || null,
+      finalContent || null,
       imageUrl || null,
       id
     ).run()
 
-    return c.json({ success: true })
+    const updated = await c.env.DB.prepare(
+      'SELECT * FROM projects WHERE id = ?'
+    ).bind(id).first()
+
+    return c.json({ success: true, project: updated })
   } catch (error) {
     console.error(error)
     return c.json({ error: 'Failed to update project' }, 500)

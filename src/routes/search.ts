@@ -26,10 +26,10 @@ export function search(app: Hono) {
             u.userIcon as rankIcon,
             u.userTitle as rankTitle
           FROM users u
-          WHERE u.username LIKE ? OR u.login LIKE ?
+          WHERE u.username LIKE ?
           ORDER BY u.username ASC
           LIMIT ?`
-        ).bind(searchTerm, searchTerm, limit).all()
+        ).bind(searchTerm, limit).all()
 
         return c.json({ users: users.results || [] })
       }

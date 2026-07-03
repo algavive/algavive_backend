@@ -42,7 +42,7 @@ app.get('/api/projects', async (c) => {
         p.is_entertaiment
       FROM projects p
       LEFT JOIN users u ON p.user_id = u.id
-      WHERE p.is_published = 1
+      WHERE p.is_published = 1 AND (p.is_entertaiment IS NULL OR p.is_entertaiment = 0)
       ORDER BY ${orderBy}
       LIMIT ? OFFSET ?`
     ).bind(limit, offset).all()
