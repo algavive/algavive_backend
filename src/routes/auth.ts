@@ -61,7 +61,6 @@ export function auth(app: Hono) {
       await c.env.DB.prepare('UPDATE users SET username = ? WHERE id = ?').bind(`User${user.id}`, user.id).run()
       const token = await sign({
         id: user.id,
-        login: user.login,
         exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30
       }, c.env.JWT_SECRET, JWT_ALG)
       setAuthCookie(c, token)
@@ -91,7 +90,6 @@ export function auth(app: Hono) {
       }
       const token = await sign({
         id: user.id,
-        login: user.login,
         exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30
       }, c.env.JWT_SECRET, JWT_ALG)
       setAuthCookie(c, token)
@@ -148,7 +146,6 @@ export function auth(app: Hono) {
 
         const token = await sign({
           id: user.id,
-          login: user.login,
           exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30
         }, c.env.JWT_SECRET, JWT_ALG)
         setAuthCookie(c, token)
@@ -160,7 +157,6 @@ export function auth(app: Hono) {
         }
         const token = await sign({
           id: user.id,
-          login: user.login,
           exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30
         }, c.env.JWT_SECRET, JWT_ALG)
         setAuthCookie(c, token)
@@ -214,7 +210,6 @@ export function auth(app: Hono) {
 
     const newToken = await sign({
       id: updatedUser.id,
-      login: updatedUser.login,
       exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30
     }, c.env.JWT_SECRET, JWT_ALG)
 

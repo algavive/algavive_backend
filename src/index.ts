@@ -10,6 +10,7 @@ import { projects } from './routes/projects'
 import { user } from './routes/user'
 import { trends } from './routes/trends'
 import { entertainment } from './routes/entertainment'
+import { admin } from './routes/admin'
 
 //тестовый ключ капчи: 1x0000000000000000000000000000000AA
 
@@ -46,5 +47,6 @@ projects(app)
 user(app)
 trends(app)
 entertainment(app)
+admin(app)
 
 export default app

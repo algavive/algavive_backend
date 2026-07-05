@@ -16,7 +16,7 @@ CREATE TABLE users_api_limits (
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   /*api лимиты, действия за день*/
   api_limit_change_username INTEGER NOT NULL DEFAULT 3, /*то есть 3 раза в день можно менять юзернейм*/
-  api_limit_create_projects INTEGER NOT NULL DEFAULT 10,
+  /*api_limit_create_projects INTEGER NOT NULL DEFAULT 10,*/
   PRIMARY KEY (user_id)
 );
 
@@ -33,7 +33,7 @@ CREATE TABLE projects (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   description TEXT,
-  is_trends INTEGER NULL, /*0 или NULL - false(остается без трендов, для is_entertaiment они не могут в is_trend, занимать что-то выше нуля), 1 - тренды дня, 2 - тренды недели, 3 - тренды месяца*/
+  is_trends INTEGER NULL, /*0 или NULL - false(остается без трендов, для is_entertaiment они не могут в is_trend, занимать что-то выше нуля), 1 - тренды*/
   is_entertaiment INTEGER NULL, /*публикация в центр развлечений и при публикации сам по умолчанию*/
   is_published INTEGER NOT NULL /*0 - не опубликован, 1 - опубликован(с параметрами is_trend и is_entertaiment)*/
 );
@@ -64,24 +64,32 @@ CREATE TABLE views (
   UNIQUE(user_id, projects_id)
 );
 
+
+/*
+Лучше не буду трогать пока выпускаю демо релиз
+
 CREATE TABLE notifications (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   type TEXT NOT NULL,
   content TEXT,
   user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+);*/
+
+/*
+Я придумал новые права, то есть типа модератор это 1, админ это 2, вице-админ это 3, а владелец 9.
 
 CREATE TABLE admin_permissions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL,
-  /*Дальше bollean значения*/
+  Дальше bollean значения
   perm_delete_comments INTEGER NOT NULL DEFAULT 0,
   perm_unpublish_projects INTEGER NOT NULL DEFAULT 0,
   perm_ban_users INTEGER NOT NULL DEFAULT 0,
   perm_gives_users_icons_and_titles INTEGER NOT NULL DEFAULT 0,
   perm_publish_entertaiment INTEGER NOT NULL DEFAULT 0
 );
+*/
 
 CREATE TABLE admin_log( /*Очищаться будет каждый день, будет только касаться всего, кроме perm_publish_entertaiment*/
   id INTEGER PRIMARY KEY AUTOINCREMENT,

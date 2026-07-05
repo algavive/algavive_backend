@@ -16,6 +16,10 @@ export function project(app: Hono) {
         } catch {}
       }
 
+      const check = await c.env.DB.prepare('SELECT is_published, user_id FROM projects WHERE id=?').bind(id).first()
+      if (!check.is_published && Number(check.user_id) !== Number(userId))
+        return c.json({ error: 'Project not found' }, 404)
+
       const project = await c.env.DB.prepare(
         `SELECT 
           p.*,
@@ -388,7 +392,7 @@ app.put('/api/project/:id', async (c) => {
 
     if (!project) return c.json({ error: 'Project not found' }, 404)
 
-    if (project.user_id !== payload.id && !(payload.admin === 1 || payload.admin === 2)) {
+    if (project.user_id !== payload.id) { //&& !(payload.admin === 1 || payload.admin === 2)
       return c.json({ error: 'Forbidden' }, 403)
     }
 
@@ -489,7 +493,7 @@ app.put('/api/project/:id', async (c) => {
       ).bind(payload.id).first()
 
       await c.env.DB.prepare(
-        'UPDATE projects SET is_published = 1, is_trends = 1 WHERE id = ?'
+        'UPDATE projects SET is_published = 1, is_trends = 0 WHERE id = ?'
       ).bind(id).run()
 
       return c.json({ success: true })
