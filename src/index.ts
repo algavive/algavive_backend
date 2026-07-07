@@ -18,6 +18,7 @@ type Bindings = {
   DB: D1Database
   TURNSTILE_SECRET: string
   JWT_SECRET: string
+  SIMPREG?: boolean
 }
 
 const FRONTEND_URL = (BACKDEV_MODE: boolean): string => {

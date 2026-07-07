@@ -4,6 +4,8 @@ import { sign, verify } from 'hono/jwt'
 
 const JWT_ALG = 'HS256'
 
+const SimpleRegistration: boolean = false 
+
 function getTokenFromCookie(c: any): string | null {
   const cookie = c.req.header('Cookie')
   if (!cookie) return null
@@ -47,6 +49,9 @@ export function auth(app: Hono) {
       const isHuman = await verifyTurnstile(turnstileToken, c.env.TURNSTILE_SECRET)
       if (!isHuman) {
         return c.json({ error: 'Invalid captcha' }, 400)
+      }
+      if (!c.env.SIMPREG) {
+        return c.json({ error: 'Владелец выключил обычную регистрацию' }, 400)
       }
       const existing = await c.env.DB.prepare('SELECT * FROM users WHERE login = ?').bind(login).first()
       if (existing) {

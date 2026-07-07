@@ -6,7 +6,7 @@ CREATE TABLE users (
   username TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   description TEXT,
-  admin INTEGER DEFAULT 0, /*аерархия прав будет 1 это админы с правами, а 2 это владелец*/
+  admin INTEGER DEFAULT 0, 
   avatarUrl TEXT,
   userIcon TEXT,
   userTitle TEXT
@@ -14,10 +14,22 @@ CREATE TABLE users (
 
 CREATE TABLE users_api_limits (
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  /*api лимиты, действия за день*/
-  api_limit_change_username INTEGER NOT NULL DEFAULT 3, /*то есть 3 раза в день можно менять юзернейм*/
-  /*api_limit_create_projects INTEGER NOT NULL DEFAULT 10,*/
+  /*api лимиты, действия за день, минуту*/
+  api_limit_change_username_per_day INTEGER NOT NULL DEFAULT 1, /*то есть 1 раз в день можно менять юзернейм*/
+  api_limit_create_comments_per_minute INTEGER NOT NULL DEFAULT 3,
+  api_limit_create_projects_per_minute INTEGER NOT NULL DEFAULT 1,
+
+  api_limit_username_exempt INTEGER DEFAULT 0,
+  api_limit_comments_exempt INTEGER DEFAULT 0,
+  api_limit_projects_exempt INTEGER DEFAULT 0,
+
   PRIMARY KEY (user_id)
+);
+
+CREATE TABLE users_api_limits_use (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  action INTEGER NOT NULL /*0 - username, 1 - create comments, 2 - create projects*/
 );
 
 CREATE TABLE projects (
@@ -106,6 +118,8 @@ CREATE TABLE admin_ban(
   user_id_who_baned INTEGER NOT NULL,
   duration TIMESTAMP
 );
+
+CREATE INDEX idx_limits_use_user_action_created ON users_api_limits_use(user_id, action, created_at);
 
 CREATE INDEX idx_users_login ON users(login);
 CREATE INDEX idx_users_google_id ON users(google_id);

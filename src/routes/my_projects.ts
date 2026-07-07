@@ -1,38 +1,121 @@
 import { Hono } from 'hono'
 import { verifyCookie, getTokenFromCookie } from '../utils/cookie'
-import * as config from '../config'
+import validTypes from '../config'
+import {CHECK_ALLOWED_URLS} from '../config'
 
-const validTypes = ['Пост', 'Scratch', 'Видео', 'Web']
+async function verifyTurnstile(token: string, secret: string) {
+  const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ secret, response: token })
+  })
+  const data = await res.json()
+  return data.success
+}
+
+
 const MAX_PROJECTS = 25
 
 export function my_projects(app: Hono) {
-	app.post("/api/create/project", async(c) => {
-    	const {title, type, imageUrl, content} = await c.req.json()
 
-    	const token = getTokenFromCookie(c)
-    	if (!token) {
-      	return c.json({ error: 'Unauthorized' }, 401)
-    	}
-    	if (title.length < 1 || title.length > 128) {
-      		return c.json({ error: 'title должен быть от 1 до 128 символов' }, 400)
-    	}
-      	if (!validTypes.includes(type)) {
-        	return c.json({ error: 'Неверный тип проекта' }, 400)
-      	}
-      	if (imageUrl && (imageUrl.length < 1 || imageUrl.length > 256)) {
-  			return c.json({ error: 'imageUrl должен быть от 1 до 256 символов' }, 400)
-		}
-    	const payload = await verifyCookie(token, c)
-    	const result = await c.env.DB.prepare(
-      		'INSERT INTO projects(user_id, title, type, imageUrl, is_published) VALUES(?,?,?,?,?)'
-    	).bind(payload.id, title, type, imageUrl, 0).run()
-    	
-    	const project = await c.env.DB.prepare(
-  			'SELECT * FROM projects WHERE id = ?'
-		).bind(result.meta?.last_row_id || result.lastInsertRowid).first()
+app.post('/api/create/project', async (c) => {
+  try {
+    const token = getTokenFromCookie(c)
+    if (!token) {
+      return c.json({ error: 'Unauthorized' }, 401)
+    }
 
-    	return c.json({ success: true, project }, 200)
-  	})
+    const payload = await verifyCookie(token, c)
+
+    const banned = await c.env.DB.prepare(
+      'SELECT * FROM admin_ban WHERE user_id = ? AND (duration IS NULL OR duration > datetime("now"))'
+    ).bind(payload.id).first()
+    if (banned) {
+      return c.json({ error: 'You banned' }, 403)
+    }
+
+    await c.env.DB.prepare(
+      `INSERT OR IGNORE INTO users_api_limits (user_id) VALUES (?)`
+    ).bind(payload.id).run()
+
+    const limits = await c.env.DB.prepare(
+      'SELECT api_limit_create_projects_per_minute, api_limit_projects_exempt FROM users_api_limits WHERE user_id = ?'
+    ).bind(payload.id).first()
+
+    let limitPerMinute = 1
+    let isExempt = 0
+    if (limits) {
+      limitPerMinute = limits.api_limit_create_projects_per_minute
+      isExempt = limits.api_limit_projects_exempt
+    }
+
+    if (isExempt === 0) {
+      const count = await c.env.DB.prepare(
+        `SELECT COUNT(*) as cnt FROM users_api_limits_use
+         WHERE user_id = ? AND action = 2 AND created_at >= datetime('now', '-1 minute')`
+      ).bind(payload.id).first()
+
+      if (count.cnt >= limitPerMinute) {
+        return c.json({ error: 'Лимит создания проектов исчерпан' }, 429)
+      }
+    }
+
+    const { title, type, imageUrl, turnstileToken } = await c.req.json()
+
+    const check = CHECK_ALLOWED_URLS(c, imageUrl);
+    if (check !== true) return check;
+
+    if (!title || title.length < 1 || title.length > 100) {
+      return c.json({ error: 'Название должно быть от 1 до 100 символов' }, 400)
+    }
+
+    const validTypes = ['Пост', 'Scratch', 'Видео', 'Web']
+    if (!validTypes.includes(type)) {
+      return c.json({ error: 'Неверный тип проекта' }, 400)
+    }
+
+    if (imageUrl && imageUrl.length > 512) {
+      return c.json({ error: 'Слишком длинная ссылка на изображение' }, 400)
+    }
+
+    if (!turnstileToken) {
+      return c.json({ error: 'Captcha required' }, 400)
+    }
+
+    const isHuman = await verifyTurnstile(turnstileToken, c.env.TURNSTILE_SECRET)
+    if (!isHuman) {
+      return c.json({ error: 'Invalid captcha' }, 400)
+    }
+
+    const now = new Date().toISOString()
+    const result = await c.env.DB.prepare(
+      `INSERT INTO projects (user_id, title, type, imageUrl, content, created_at, updated_at, is_published)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(
+      payload.id,
+      title,
+      type,
+      imageUrl || null,
+      null,
+      now,
+      now,
+      0
+    ).run()
+
+    await c.env.DB.prepare(
+      'INSERT INTO users_api_limits_use (user_id, action) VALUES (?, 2)'
+    ).bind(payload.id).run()
+
+    const project = await c.env.DB.prepare(
+      'SELECT * FROM projects WHERE id = ?'
+    ).bind(result.meta?.last_row_id || result.lastInsertRowid).first()
+
+    return c.json({ success: true, project })
+  } catch (error) {
+    console.error(error)
+    return c.json({ error: 'Failed to create project' }, 500)
+  }
+})
 
 
 app.get("/api/my-projects", async(c) => {

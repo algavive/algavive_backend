@@ -1,23 +1,44 @@
 import { Hono } from 'hono'
 import { getTokenFromCookie, verifyCookie } from '../utils/cookie'
+import {CHECK_ALLOWED_URLS} from '../config'
 
-function hasPermission(actorLevel: number, targetLevel: number, action: 'set_role' | 'remove_role' | 'ban' | 'unban' | 'set_icon' | 'set_title'): boolean {
+async function verifyTurnstile(token: string, secret: string) {
+  const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ secret, response: token })
+  })
+  const data = await res.json()
+  return data.success
+}
+
+function canAct(actorLevel: number, targetLevel: number, action: string): boolean {
   if (actorLevel === 9) return true
+  if (targetLevel >= actorLevel) return false
+
   if (actorLevel === 3) {
     if (action === 'set_role' && targetLevel <= 2) return true
     if (action === 'remove_role' && targetLevel <= 2 && targetLevel > 0) return true
-    if (action === 'ban' || action === 'unban' || action === 'set_icon' || action === 'set_title') return true
+    if (['ban', 'unban', 'set_icon', 'set_title', 'reset_profile'].includes(action)) return true
     return false
   }
+
   if (actorLevel === 2) {
     if (action === 'set_role' && targetLevel === 1) return true
     if (action === 'remove_role' && targetLevel === 1) return true
-    if (action === 'ban' || action === 'unban' || action === 'set_icon' || action === 'set_title') return true
+    if (['ban', 'unban', 'set_icon', 'set_title', 'reset_profile'].includes(action)) return true
     return false
   }
-  if (actorLevel === 1) {
-    return false
-  }
+
+  if (actorLevel === 1) return false
+  return false
+}
+
+function canAssignRole(actorLevel: number, newRole: number): boolean {
+  if (actorLevel === 9) return true
+  if (newRole === 9) return false
+  if (actorLevel === 3) return newRole <= 2
+  if (actorLevel === 2) return newRole <= 1
   return false
 }
 
@@ -35,7 +56,11 @@ export function admin(app: Hono) {
       const offset = (page - 1) * limit
 
       const logs = await c.env.DB.prepare(
-        `SELECT * FROM admin_log ORDER BY created_at DESC LIMIT ? OFFSET ?`
+        `SELECT al.*, u.username as admin_name 
+         FROM admin_log al
+         LEFT JOIN users u ON al.user_id = u.id
+         ORDER BY al.created_at DESC 
+         LIMIT ? OFFSET ?`
       ).bind(limit, offset).all()
 
       const total = await c.env.DB.prepare(
@@ -63,8 +88,14 @@ export function admin(app: Hono) {
       const actor = await c.env.DB.prepare('SELECT id, admin, username FROM users WHERE id = ?').bind(payload.id).first()
       if (!actor || actor.admin < 2) return c.json({ error: 'Forbidden' }, 403)
 
-      const { action, targetUserId, value } = await c.req.json()
+      const { action, targetUserId, value, turnstileToken } = await c.req.json()
+
       if (!action || !targetUserId) return c.json({ error: 'Missing fields' }, 400)
+
+      const isHuman = await verifyTurnstile(turnstileToken, c.env.TURNSTILE_SECRET)
+      if (!isHuman) {
+        return c.json({ error: 'Invalid captcha' }, 400)
+      }
 
       const target = await c.env.DB.prepare('SELECT id, admin, username FROM users WHERE id = ?').bind(targetUserId).first()
       if (!target) return c.json({ error: 'User not found' }, 404)
@@ -72,42 +103,41 @@ export function admin(app: Hono) {
       const actorLevel = actor.admin
       const targetLevel = target.admin
 
-      let result = null
+      if (!canAct(actorLevel, targetLevel, action)) {
+        return c.json({ error: 'Insufficient permissions to act on this user' }, 403)
+      }
+
       let logMessage = ''
 
       switch (action) {
         case 'set_role': {
           const newRole = parseInt(value)
           if (isNaN(newRole) || newRole < 0 || newRole > 9) return c.json({ error: 'Invalid role' }, 400)
-          if (newRole === 9) return c.json({ error: 'Cannot assign owner role' }, 403)
-          if (!hasPermission(actorLevel, newRole, 'set_role')) return c.json({ error: 'Insufficient permissions' }, 403)
-          if (actorLevel === 3 && newRole > 2) return c.json({ error: 'Cannot assign role above 2' }, 403)
-          if (actorLevel === 2 && newRole > 1) return c.json({ error: 'Cannot assign role above 1' }, 403)
+          if (!canAssignRole(actorLevel, newRole)) {
+            return c.json({ error: 'Cannot assign this role' }, 403)
+          }
           await c.env.DB.prepare('UPDATE users SET admin = ? WHERE id = ?').bind(newRole, targetUserId).run()
-          logMessage = `User ${actor.username} (${actor.id}) set role ${newRole} for user ${target.username} (${target.id})`
+          logMessage = `Админ ${actor.username} (${actor.id}) установил роль ${newRole} у ${target.username} (${target.id})`
           break
         }
         case 'remove_role': {
           if (targetLevel === 0) return c.json({ error: 'User has no role to remove' }, 400)
-          if (targetLevel === 9) return c.json({ error: 'Cannot remove owner role' }, 403)
-          if (!hasPermission(actorLevel, targetLevel, 'remove_role')) return c.json({ error: 'Insufficient permissions' }, 403)
           await c.env.DB.prepare('UPDATE users SET admin = 0 WHERE id = ?').bind(targetUserId).run()
-          logMessage = `User ${actor.username} (${actor.id}) removed role ${targetLevel} from user ${target.username} (${target.id})`
+          logMessage = `Админ ${actor.username} (${actor.id}) убрал роль ${targetLevel} у ${target.username} (${target.id})`
           break
         }
         case 'ban': {
-          if (!hasPermission(actorLevel, targetLevel, 'ban')) return c.json({ error: 'Insufficient permissions' }, 403)
           const duration = value || '1d'
           let until = null
           if (duration === 'always') {
             until = '9999-12-31 23:59:59'
           } else if (duration === 'never') {
             await c.env.DB.prepare('DELETE FROM admin_ban WHERE user_id = ?').bind(targetUserId).run()
-            logMessage = `User ${actor.username} (${actor.id}) unbanned user ${target.username} (${target.id})`
+            logMessage = `Админ ${actor.username} (${actor.id}) разбанил ${target.username} (${target.id})`
             break
           } else {
             const match = duration.match(/^(\d+)([hd])$/)
-            if (!match) return c.json({ error: 'Invalid duration format, use e.g. "5h" or "7d"' }, 400)
+            if (!match) return c.json({ error: 'Неправильный часовой формат, используйте "5h" или "7d"' }, 400)
             const num = parseInt(match[1])
             const unit = match[2]
             const now = new Date()
@@ -118,27 +148,44 @@ export function admin(app: Hono) {
           await c.env.DB.prepare(
             'INSERT INTO admin_ban (user_id, user_id_who_baned, duration) VALUES (?, ?, ?)'
           ).bind(targetUserId, actor.id, until).run()
-          logMessage = `User ${actor.username} (${actor.id}) banned user ${target.username} (${target.id}) until ${until}`
+          logMessage = `Админ ${actor.username} (${actor.id}) забанил ${target.username} (${target.id}) до ${until}`
           break
         }
         case 'unban': {
-          if (!hasPermission(actorLevel, targetLevel, 'unban')) return c.json({ error: 'Insufficient permissions' }, 403)
           await c.env.DB.prepare('DELETE FROM admin_ban WHERE user_id = ?').bind(targetUserId).run()
-          logMessage = `User ${actor.username} (${actor.id}) unbanned user ${target.username} (${target.id})`
+          logMessage = `Админ ${actor.username} (${actor.id}) разбанил ${target.username} (${target.id})`
           break
         }
         case 'set_icon': {
-          if (!hasPermission(actorLevel, targetLevel, 'set_icon')) return c.json({ error: 'Insufficient permissions' }, 403)
-          if (!value || typeof value !== 'string' || value.length > 256) return c.json({ error: 'Invalid icon URL' }, 400)
-          await c.env.DB.prepare('UPDATE users SET userIcon = ? WHERE id = ?').bind(value, targetUserId).run()
-          logMessage = `User ${actor.username} (${actor.id}) set icon for user ${target.username} (${target.id})`
+          const iconValue = (value === "null") ? null : value
+          if (iconValue !== null && (typeof iconValue !== 'string' || iconValue.length > 256)) {
+            return c.json({ error: 'Invalid icon URL' }, 400)
+          }
+          const check = CHECK_ALLOWED_URLS(c, iconValue);
+          if (check !== true) return check;
+          await c.env.DB.prepare('UPDATE users SET userIcon = ? WHERE id = ?').bind(iconValue, targetUserId).run()
+          logMessage = iconValue === null
+            ? `Админ ${actor.username} (${actor.id}) убрал иконку у ${target.username} (${target.id})`
+            : `Админ ${actor.username} (${actor.id}) установил иконку ${iconValue} у ${target.username} (${target.id})`
           break
         }
         case 'set_title': {
-          if (!hasPermission(actorLevel, targetLevel, 'set_title')) return c.json({ error: 'Insufficient permissions' }, 403)
-          if (!value || typeof value !== 'string' || value.length > 64) return c.json({ error: 'Invalid title' }, 400)
-          await c.env.DB.prepare('UPDATE users SET userTitle = ? WHERE id = ?').bind(value, targetUserId).run()
-          logMessage = `User ${actor.username} (${actor.id}) set title "${value}" for user ${target.username} (${target.id})`
+          const titleValue = (value === "null") ? null : value
+          if (titleValue !== null && (typeof titleValue !== 'string' || titleValue.length > 64)) {
+            return c.json({ error: 'Invalid title' }, 400)
+          }
+          await c.env.DB.prepare('UPDATE users SET userTitle = ? WHERE id = ?').bind(titleValue, targetUserId).run()
+          logMessage = titleValue === null
+            ? `Админ ${actor.username} (${actor.id}) убрал титул у ${target.username} (${target.id})`
+            : `Админ ${actor.username} (${actor.id}) поставил титул "${titleValue}" у ${target.username} (${target.id})`
+          break
+        }
+        case 'reset_profile': {
+          const defaultUsername = `User${target.id}`
+          await c.env.DB.prepare(
+            'UPDATE users SET username = ?, avatarUrl = NULL, description = NULL WHERE id = ?'
+          ).bind(defaultUsername, targetUserId).run()
+          logMessage = `Админ ${actor.username} (${actor.id}) сбросил профиль у ${target.username} (${target.id})`
           break
         }
         default:

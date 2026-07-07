@@ -1,5 +1,17 @@
 import { Hono } from 'hono'
 import { getTokenFromCookie, verifyCookie } from '../utils/cookie'
+import {CHECK_ALLOWED_URLS} from '../config'
+
+async function verifyTurnstile(token: string, secret: string) {
+  const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ secret, response: token })
+  })
+  const data = await res.json()
+  return data.success
+}
+
 
 export function project(app: Hono) {
   app.get('/api/project/:id', async (c) => {
@@ -119,49 +131,94 @@ export function project(app: Hono) {
     }
   })
 
-  app.post('/api/project/:id/comments', async (c) => {
-    try {
-      const token = getTokenFromCookie(c)
-      if (!token) return c.json({ error: 'Unauthorized' }, 401)
+app.post('/api/project/:id/comments', async (c) => {
+  try {
+    const token = getTokenFromCookie(c)
+    if (!token) return c.json({ error: 'Unauthorized' }, 401)
 
-      const payload = await verifyCookie(token, c)
-      const id = parseInt(c.req.param('id'))
-      const { content } = await c.req.json()
+    const payload = await verifyCookie(token, c)
 
-      if (!content || content.trim().length === 0) {
-        return c.json({ error: 'Comment content is required' }, 400)
-      }
+    const banned = await c.env.DB.prepare(
+      'SELECT * FROM admin_ban WHERE user_id = ? AND (duration IS NULL OR duration > datetime("now"))'
+    ).bind(payload.id).first()
+    if (banned) return c.json({ error: 'You banned' }, 403)
 
-      if (content.length > 300) {
-        return c.json({ error: 'Комментарий не может быть больше 300 символов' }, 400)
-      }
+    await c.env.DB.prepare(
+      `INSERT OR IGNORE INTO users_api_limits (user_id) VALUES (?)`
+    ).bind(payload.id).run()
 
-      const result = await c.env.DB.prepare(
-        `INSERT INTO comments (project_id, user_id, content, is_reply) VALUES (?, ?, ?, ?)`
-      ).bind(id, payload.id, content.trim(), 0).run()
+    const limits = await c.env.DB.prepare(
+      'SELECT api_limit_create_comments_per_minute, api_limit_comments_exempt FROM users_api_limits WHERE user_id = ?'
+    ).bind(payload.id).first()
 
-      await c.env.DB.prepare(
-        'UPDATE projects SET comments_count = comments_count + 1 WHERE id = ?'
-      ).bind(id).run()
-
-      const comment = await c.env.DB.prepare(
-        `SELECT 
-          c.*,
-          u.username as author,
-          u.avatarUrl as authorProfile,
-          u.userIcon as authorIcon,
-          u.userTitle as authorTitle
-        FROM comments c
-        LEFT JOIN users u ON c.user_id = u.id
-        WHERE c.id = ?`
-      ).bind(result.meta?.last_row_id || result.lastInsertRowid).first()
-
-      return c.json({ comment })
-    } catch (error) {
-      console.error(error)
-      return c.json({ error: 'Failed to add comment' }, 500)
+    let limitPerMinute = 3
+    let isExempt = 0
+    if (limits) {
+      limitPerMinute = limits.api_limit_create_comments_per_minute
+      isExempt = limits.api_limit_comments_exempt
     }
-  })
+
+    if (isExempt === 0) {
+      const count = await c.env.DB.prepare(
+        `SELECT COUNT(*) as cnt FROM users_api_limits_use
+         WHERE user_id = ? AND action = 1 AND created_at >= datetime('now', '-1 minute')`
+      ).bind(payload.id).first()
+
+      if (count.cnt >= limitPerMinute) {
+        return c.json({ error: 'Слишком много комментариев за минуту, попробуйте позже' }, 429)
+      }
+    }
+
+    const id = parseInt(c.req.param('id'))
+    const { content, turnstileToken } = await c.req.json()
+
+    if (!turnstileToken) {
+      return c.json({ error: 'Captcha required' }, 400)
+    }
+
+    const isHuman = await verifyTurnstile(turnstileToken, c.env.TURNSTILE_SECRET)
+    if (!isHuman) {
+      return c.json({ error: 'Invalid captcha' }, 400)
+    }
+
+    if (!content || content.trim().length === 0) {
+      return c.json({ error: 'Comment content is required' }, 400)
+    }
+
+    if (content.length > 300) {
+      return c.json({ error: 'Комментарий не может быть больше 300 символов' }, 400)
+    }
+
+    const result = await c.env.DB.prepare(
+      `INSERT INTO comments (project_id, user_id, content, is_reply) VALUES (?, ?, ?, ?)`
+    ).bind(id, payload.id, content.trim(), 0).run()
+
+    await c.env.DB.prepare(
+      'UPDATE projects SET comments_count = comments_count + 1 WHERE id = ?'
+    ).bind(id).run()
+
+    await c.env.DB.prepare(
+      'INSERT INTO users_api_limits_use (user_id, action) VALUES (?, 1)'
+    ).bind(payload.id).run()
+
+    const comment = await c.env.DB.prepare(
+      `SELECT 
+        c.*,
+        u.username as author,
+        u.avatarUrl as authorProfile,
+        u.userIcon as authorIcon,
+        u.userTitle as authorTitle
+      FROM comments c
+      LEFT JOIN users u ON c.user_id = u.id
+      WHERE c.id = ?`
+    ).bind(result.meta?.last_row_id || result.lastInsertRowid).first()
+
+    return c.json({ comment })
+  } catch (error) {
+    console.error(error)
+    return c.json({ error: 'Failed to add comment' }, 500)
+  }
+})
 
 app.get('/api/project/:id/comments', async (c) => {
   try {
@@ -305,11 +362,28 @@ app.get('/api/comments/:id/replies/all', async (c) => {
         'SELECT * FROM users WHERE id = ?'
       ).bind(payload.id).first()
 
-      const isAdmin = user?.admin === 1 || user?.admin === 2
+      const isAdmin = user?.admin > 1
       const isOwner = comment.user_id === payload.id
+
+      const { turnstileToken } = await c.req.json()
+      if (user.admin && !turnstileToken) {
+        return c.json({ error: 'Captcha required for admin actions' }, 400)
+      }
+      if (user.admin) {
+        const isHuman = await verifyTurnstile(turnstileToken, c.env.TURNSTILE_SECRET)
+        if (!isHuman) {
+          return c.json({ error: 'Invalid captcha' }, 400)
+        }
+      }
 
       if (!isAdmin && !isOwner) {
         return c.json({ error: 'Forbidden' }, 403)
+      }
+      if (isAdmin && !isOwner) {
+        const banned = await c.env.DB.prepare(
+        'SELECT * FROM admin_ban WHERE user_id = ?'
+      ).bind(payload.id).first()
+      if(banned) { return c.json({error: 'You banned'},403)}
       }
 
       await c.env.DB.prepare(
@@ -327,55 +401,100 @@ app.get('/api/comments/:id/replies/all', async (c) => {
     }
   })
 
-  app.post('/api/comments/:id/reply', async (c) => {
-    try {
-      const token = getTokenFromCookie(c)
-      if (!token) return c.json({ error: 'Unauthorized' }, 401)
+app.post('/api/comments/:id/reply', async (c) => {
+  try {
+    const token = getTokenFromCookie(c)
+    if (!token) return c.json({ error: 'Unauthorized' }, 401)
 
-      const payload = await verifyCookie(token, c)
-      const parentId = parseInt(c.req.param('id'))
-      const { content } = await c.req.json()
+    const payload = await verifyCookie(token, c)
 
-      if (!content || content.trim().length === 0) {
-        return c.json({ error: 'Reply content is required' }, 400)
-      }
-      if (content.length > 300) {
-        return c.json({ error: 'Ответ на комментарий не может быть больше 300 символов' }, 400)
-      }
+    const banned = await c.env.DB.prepare(
+      'SELECT * FROM admin_ban WHERE user_id = ? AND (duration IS NULL OR duration > datetime("now"))'
+    ).bind(payload.id).first()
+    if (banned) return c.json({ error: 'You are banned' }, 403)
 
-      const parent = await c.env.DB.prepare(
-        'SELECT * FROM comments WHERE id = ?'
-      ).bind(parentId).first()
+    await c.env.DB.prepare(
+      `INSERT OR IGNORE INTO users_api_limits (user_id) VALUES (?)`
+    ).bind(payload.id).run()
 
-      if (!parent) return c.json({ error: 'Parent comment not found' }, 404)
+    const limits = await c.env.DB.prepare(
+      'SELECT api_limit_create_comments_per_minute, api_limit_comments_exempt FROM users_api_limits WHERE user_id = ?'
+    ).bind(payload.id).first()
 
-      const result = await c.env.DB.prepare(
-        `INSERT INTO comments (project_id, user_id, content, is_reply, reply_id) 
-         VALUES (?, ?, ?, ?, ?)`
-      ).bind(parent.project_id, payload.id, content.trim(), 1, parentId).run()
-
-      await c.env.DB.prepare(
-        'UPDATE projects SET comments_count = comments_count + 1 WHERE id = ?'
-      ).bind(parent.project_id).run()
-
-      const reply = await c.env.DB.prepare(
-        `SELECT 
-          c.*,
-          u.username as author,
-          u.avatarUrl as authorProfile,
-          u.userIcon as authorIcon,
-          u.userTitle as authorTitle
-        FROM comments c
-        LEFT JOIN users u ON c.user_id = u.id
-        WHERE c.id = ?`
-      ).bind(result.meta?.last_row_id || result.lastInsertRowid).first()
-
-      return c.json({ reply })
-    } catch (error) {
-      console.error(error)
-      return c.json({ error: 'Failed to add reply' }, 500)
+    let limitPerMinute = 3
+    let isExempt = 0
+    if (limits) {
+      limitPerMinute = limits.api_limit_create_comments_per_minute
+      isExempt = limits.api_limit_comments_exempt
     }
-  })
+
+    if (isExempt === 0) {
+      const count = await c.env.DB.prepare(
+        `SELECT COUNT(*) as cnt FROM users_api_limits_use
+         WHERE user_id = ? AND action = 1 AND created_at >= datetime('now', '-1 minute')`
+      ).bind(payload.id).first()
+
+      if (count.cnt >= limitPerMinute) {
+        return c.json({ error: 'Слишком много комментариев за минуту, попробуйте позже' }, 429)
+      }
+    }
+
+    const parentId = parseInt(c.req.param('id'))
+    const { content, turnstileToken } = await c.req.json()
+
+    if (!turnstileToken) {
+      return c.json({ error: 'Captcha required' }, 400)
+    }
+
+    const isHuman = await verifyTurnstile(turnstileToken, c.env.TURNSTILE_SECRET)
+    if (!isHuman) {
+      return c.json({ error: 'Invalid captcha' }, 400)
+    }
+
+    if (!content || content.trim().length === 0) {
+      return c.json({ error: 'Reply content is required' }, 400)
+    }
+    if (content.length > 300) {
+      return c.json({ error: 'Ответ на комментарий не может быть больше 300 символов' }, 400)
+    }
+
+    const parent = await c.env.DB.prepare(
+      'SELECT * FROM comments WHERE id = ?'
+    ).bind(parentId).first()
+
+    if (!parent) return c.json({ error: 'Parent comment not found' }, 404)
+
+    const result = await c.env.DB.prepare(
+      `INSERT INTO comments (project_id, user_id, content, is_reply, reply_id) 
+       VALUES (?, ?, ?, ?, ?)`
+    ).bind(parent.project_id, payload.id, content.trim(), 1, parentId).run()
+
+    await c.env.DB.prepare(
+      'UPDATE projects SET comments_count = comments_count + 1 WHERE id = ?'
+    ).bind(parent.project_id).run()
+
+    await c.env.DB.prepare(
+      'INSERT INTO users_api_limits_use (user_id, action) VALUES (?, 1)'
+    ).bind(payload.id).run()
+
+    const reply = await c.env.DB.prepare(
+      `SELECT 
+        c.*,
+        u.username as author,
+        u.avatarUrl as authorProfile,
+        u.userIcon as authorIcon,
+        u.userTitle as authorTitle
+      FROM comments c
+      LEFT JOIN users u ON c.user_id = u.id
+      WHERE c.id = ?`
+    ).bind(result.meta?.last_row_id || result.lastInsertRowid).first()
+
+    return c.json({ reply })
+  } catch (error) {
+    console.error(error)
+    return c.json({ error: 'Failed to add reply' }, 500)
+  }
+})
 
 app.put('/api/project/:id', async (c) => {
   try {
@@ -386,16 +505,22 @@ app.put('/api/project/:id', async (c) => {
     const id = parseInt(c.req.param('id'))
     const { title, description, content, imageUrl } = await c.req.json()
 
+    const check = CHECK_ALLOWED_URLS(c, content);
+    if (check !== true) return check;
+
+    const check2 = CHECK_ALLOWED_URLS(c, imageUrl);
+    if (check2 !== true) return check2;
+
     const project = await c.env.DB.prepare(
       'SELECT * FROM projects WHERE id = ?'
     ).bind(id).first()
 
     if (!project) return c.json({ error: 'Project not found' }, 404)
 
-    if (project.user_id !== payload.id) { //&& !(payload.admin === 1 || payload.admin === 2)
+    if (project.user_id !== payload.id) { 
       return c.json({ error: 'Forbidden' }, 403)
     }
-
+    //&& !(payload.admin === 1 || payload.admin === 2)
     let finalContent = content
 
     if (content !== undefined && content !== null) {
@@ -464,8 +589,8 @@ app.put('/api/project/:id', async (c) => {
         'SELECT * FROM users WHERE id = ?'
       ).bind(payload.id).first()
 
-      const isAdmin = user?.admin === 1 || user?.admin === 2
-      if (project.user_id !== payload.id && !isAdmin) {
+      //const isAdmin = user?.admin > 1 //&& !isAdmin
+      if (project.user_id !== payload.id) {
         return c.json({ error: 'Forbidden' }, 403)
       }
 
@@ -486,8 +611,22 @@ app.put('/api/project/:id', async (c) => {
       if (!token) return c.json({ error: 'Unauthorized' }, 401)
 
       const payload = await verifyCookie(token, c)
+    const banned = await c.env.DB.prepare(
+        'SELECT * FROM admin_ban WHERE user_id = ?'
+      ).bind(payload.id).first()
+      if(banned) { return c.json({error: 'You banned'},403)}
+
       const id = parseInt(c.req.param('id'))
 
+      const project = await c.env.DB.prepare(
+      'SELECT * FROM projects WHERE id = ?'
+    ).bind(id).first()
+
+      if (!project) return c.json({ error: 'Project not found' }, 404)
+
+      if (project.user_id !== payload.id) { 
+        return c.json({ error: 'Project not found' }, 404)
+      }
       const user = await c.env.DB.prepare(
         'SELECT * FROM users WHERE id = ?'
       ).bind(payload.id).first()
@@ -509,13 +648,29 @@ app.put('/api/project/:id', async (c) => {
       if (!token) return c.json({ error: 'Unauthorized' }, 401)
 
       const payload = await verifyCookie(token, c)
+
+    const banned = await c.env.DB.prepare(
+        'SELECT * FROM admin_ban WHERE user_id = ?'
+      ).bind(payload.id).first()
+      if(banned) { return c.json({error: 'You banned'},403)}
+
       const id = parseInt(c.req.param('id'))
 
       const user = await c.env.DB.prepare(
         'SELECT * FROM users WHERE id = ?'
       ).bind(payload.id).first()
 
-      if (!(user?.admin === 1 || user?.admin === 2)) {
+      const project = await c.env.DB.prepare(
+      'SELECT * FROM projects WHERE id = ?'
+    ).bind(id).first()
+
+      if (!project) return c.json({ error: 'Project not found' }, 404)
+
+      if (project.user_id !== payload.id) { 
+        return c.json({ error: 'Project not found' }, 404)
+      }
+
+      if (!(user?.admin > 0)) {
         return c.json({ error: 'Forbidden' }, 403)
       }
 
@@ -542,9 +697,33 @@ app.put('/api/project/:id', async (c) => {
         'SELECT * FROM users WHERE id = ?'
       ).bind(payload.id).first()
 
-      if (!(user?.admin === 1 || user?.admin === 2)) {
+      const project = await c.env.DB.prepare(
+      'SELECT * FROM projects WHERE id = ?'
+    ).bind(id).first()
+
+      if (!project) return c.json({ error: 'Project not found' }, 404)
+
+      if (!(user?.admin > 1 || project.user_id !== payload.id)) {
         return c.json({ error: 'Forbidden' }, 403)
       }
+      if (user?.admin > 1 && project.user_id !== payload.id) {
+
+      const { turnstileToken } = await c.req.json()
+
+      if (!turnstileToken) {
+        return c.json({ error: 'Captcha required' }, 400)
+      }
+
+      const isHuman = await verifyTurnstile(turnstileToken, c.env.TURNSTILE_SECRET)
+      if (!isHuman) {
+        return c.json({ error: 'Invalid captcha' }, 400)
+      }
+
+      const banned = await c.env.DB.prepare(
+          'SELECT * FROM admin_ban WHERE user_id = ?'
+        ).bind(payload.id).first()
+      if(banned) { return c.json({error: 'You banned'},403)}
+    }
 
       await c.env.DB.prepare(
         'UPDATE projects SET is_published = 0, is_trends = NULL, is_entertaiment = NULL WHERE id = ?'

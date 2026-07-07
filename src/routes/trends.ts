@@ -1,5 +1,7 @@
 import { Hono } from 'hono'
 
+const LIMIT = 15
+
 export function trends(app: Hono) {
   app.get('/api/trends', async (c) => {
     try {
@@ -88,7 +90,7 @@ export function trends(app: Hono) {
           AND p.is_trends = 1
           AND (p.is_entertaiment IS NULL OR p.is_entertaiment = 0)
         ORDER BY ${orderBy}
-        LIMIT 15`
+        LIMIT ${LIMIT}`
       ).all()
 
       return c.json({ projects: result.results || [] })

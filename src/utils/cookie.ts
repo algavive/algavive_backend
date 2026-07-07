@@ -23,3 +23,20 @@ export function setAuthCookie(c: any, token: string) {
 export function clearAuthCookie(c: any) {
   c.header('Set-Cookie', 'token=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0')
 }
+
+async function verifyTurnstile(token: string, secret: string) {
+  const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ secret, response: token })
+  })
+  const data = await res.json()
+  return data.success
+}
+
+async function verifyGoogleToken(token: string) {
+  const res = await fetch('https://www.googleapis.com/oauth2/v3/tokeninfo?id_token=' + token)
+  const data = await res.json()
+  if (!data.sub) throw new Error('Invalid Google token')
+  return data
+}
