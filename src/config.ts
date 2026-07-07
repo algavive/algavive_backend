@@ -16,6 +16,7 @@ const ALLOWED_URLS = [
 ] as const;
 
 export function CHECK_ALLOWED_URLS(c: any, url: string): true | Response {
+  try {
   if (!url || url.trim() === '') {
     return true;
   }
@@ -35,6 +36,9 @@ export function CHECK_ALLOWED_URLS(c: any, url: string): true | Response {
   } catch {
     return c.json({ error: 'Invalid URL format' }, 400);
   }
+} catch{
+  return true
+}
 }
 
 /*
