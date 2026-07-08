@@ -15,11 +15,18 @@ function getTokenFromCookie(c: any): string | null {
 }
 
 function setAuthCookie(c: any, token: string) {
-  c.header('Set-Cookie', `token=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=2592000`)
+  const isProduction = c.req.url.includes('workers.dev') || c.req.url.includes('algavive')
+  const sameSite = isProduction ? 'None' : 'Lax'
+  const secure = isProduction ? 'Secure; ' : ''
+  
+  c.header('Set-Cookie', `token=${token}; HttpOnly; ${secure}SameSite=${sameSite}; Path=/; Max-Age=2592000`)
 }
-
 function clearAuthCookie(c: any) {
-  c.header('Set-Cookie', 'token=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0')
+  const isProduction = c.req.url.includes('workers.dev') || c.req.url.includes('algavive')
+  const sameSite = isProduction ? 'None' : 'Lax'
+  const secure = isProduction ? 'Secure; ' : ''
+  
+  c.header('Set-Cookie', `token=; HttpOnly; ${secure}SameSite=${sameSite}; Path=/; Max-Age=0`)
 }
 
 async function verifyTurnstile(token: string, secret: string) {
