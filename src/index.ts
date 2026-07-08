@@ -23,7 +23,7 @@ type Bindings = {
 
 const FRONTEND_URL = (BACKDEV_MODE: boolean): string => {
   return BACKDEV_MODE
-    ? "http://localhost:5173"
+    ? "http://localhost:4173"
     : "*"
 }
 
