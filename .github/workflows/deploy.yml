@@ -1,0 +1,42 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Create production config from secrets
+        run: |
+          cat > wrangler.prod.toml << EOF
+          name = "backend"
+          main = "src/index.ts"
+          compatibility_date = "2024-12-01"
+
+          [[d1_databases]]
+          binding = "DB"
+          database_name = "algavive-db"
+          database_id = "${{ secrets.D1_DATABASE_ID }}"
+          EOF
+
+      - name: Deploy to Cloudflare Workers
+        run: npx wrangler deploy --config wrangler.prod.toml
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
