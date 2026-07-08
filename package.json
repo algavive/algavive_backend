@@ -5,7 +5,7 @@
   "scripts": {
     "start": "wrangler dev",
     "dev": "wrangler dev src/index.ts",
-    "deploy": "wrangler deploy --config wrangler.prod.toml",
+    "deploy": "wrangler deploy",
 
     "db:reset": "rmdir /s /q .wrangler",
     "db:create-db": "wrangler d1 execute algavive-db --local --command=\"SELECT 1;\"",
@@ -13,8 +13,8 @@
     "db:execute-schema": "wrangler d1 execute algavive-db --local --file=src/generated/execute-schema.sql",
     "db:make": "make & wrangler d1 execute algavive-db --local --file=src/generated/execute.sql",
 
-    "db:production:execute": "wrangler d1 execute algavive-db --remote --file=src/generated/execute.sql --config wrangler.prod.toml",
-    "db:production:export-schema": "wrangler d1 export algavive-db --remote --output=src/generated/execute-schema.sql --config wrangler.prod.toml --no-data"
+    "db:production:execute": "wrangler d1 execute algavive-db --remote --file=src/generated/execute.sql",
+    "db:production:export-schema": "wrangler d1 export algavive-db --remote --output=src/generated/execute-schema.sql"
   },
   "dependencies": {
     "hono": "^4.6.0"
