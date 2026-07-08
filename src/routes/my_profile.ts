@@ -85,6 +85,15 @@ app.post("/api/change/username", async (c) => {
       return c.json({ error: 'Username должен быть от 3 до 30 символов' }, 400)
     }
 
+    //проверка на юз
+    let t = await c.env.DB.prepare(
+      'SELECT username FROM users WHERE username=?'
+    ).bind(username).first()
+
+    if(t){
+      return c.json({error: 'Username уже занят'}, 401)
+    }
+
     const payload = await verifyCookie(token, c)
 
     const banned = await c.env.DB.prepare(

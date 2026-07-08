@@ -1,0 +1,12 @@
+name = "api"
+main = "src/index.ts"
+
+[dev]
+port = 8787
+
+#Локальная база данных
+
+[[d1_databases]]
+binding = "DB"
+database_name = "algavive-db"
+database_id = "00000000-0000-0000-0000-000000000000"
