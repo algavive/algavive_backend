@@ -23,8 +23,8 @@ type Bindings = {
 
 const FRONTEND_URL = (BACKDEV_MODE: boolean): string => {
   return BACKDEV_MODE
-    ? "http://localhost:4173"
-    : "https://algavive.pages.dev/"
+    ? "http://localhost:5173"
+    : "https://algavive.pages.dev"
 }
 
 const app = new Hono<{ Bindings: Bindings }>()
