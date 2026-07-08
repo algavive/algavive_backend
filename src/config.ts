@@ -28,6 +28,14 @@ export function CHECK_ALLOWED_URLS(c: any, url: string): true | Response {
   try {
     const parsed = new URL(url);
     const hostname = parsed.hostname.toLowerCase();
+
+    const pathname = parsed.pathname;
+    const ext = pathname.split('.').pop()?.toLowerCase();
+    const DISALLOWED_EXTENSIONS = ['svg', 'webp'];
+    if (ext && DISALLOWED_EXTENSIONS.includes(ext)) {
+      return c.json({ error: 'SVG and WEBP files are not allowed' }, 403);
+    }
+
     const isValid = ALLOWED_URLS.some(allowed => allowed.toLowerCase() === hostname);
     if (!isValid) {
       return c.json({ error: 'URL domain not allowed' }, 403);
