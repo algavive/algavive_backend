@@ -21,7 +21,7 @@ export function CHECK_ALLOWED_URLS(c: any, url: string): true | Response {
     return true;
   }
   
-  if (url.trim().startsWith('static/')) {
+  if (url.trim().startsWith('/')) {
     return true;
   }
 
