@@ -30,7 +30,7 @@ export function search(app: Hono) {
           ORDER BY u.username ASC
           LIMIT ?`
         ).bind(searchTerm, limit).all()
-
+//
         return c.json({ users: users.results || [] })
       }
 
