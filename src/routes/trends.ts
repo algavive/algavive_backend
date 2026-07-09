@@ -5,6 +5,7 @@ const LIMIT = 15
 export function trends(app: Hono) {
   app.get('/api/trends', async (c) => {
     try {
+      c.header('Cache-Control', 'public, max-age=10')
       const period = c.req.query('period') || 'day'
 
       const updateTrends = async () => {

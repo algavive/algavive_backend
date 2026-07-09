@@ -10,6 +10,10 @@ DEV_DB = sqlite://file?mode=memory
 
 INJECT_SCHEMA = src/generated/execute.sql
 
+DIR_GENERATED_SCHEMA_PRODUCTION = src/generated/schema-production.sql
+
+DIR_BUILDED_SCHEMA_PRODUCTION = src/generated/schema-production.sqlite
+
 .PHONY: all diff status fmt help
 
 diff:
@@ -29,5 +33,15 @@ fmt:
 
 clean:
 	rm -rf .atlas
+
+export-build:
+	sqlite3 $(DIR_BUILDED_SCHEMA_PRODUCTION) < $(DIR_GENERATED_SCHEMA_PRODUCTION)
+
+export-diff:
+	atlas schema diff \
+	  --from "sqlite://$(DIR_BUILDED_SCHEMA_PRODUCTION)" \
+	  --to "file://$(SCHEMA_FILE)" \
+	  --dev-url "$(DEV_DB)" \
+	  --format "{{ sql . }}" > $(INJECT_SCHEMA)
 
 all: diff

@@ -5,6 +5,15 @@ import {CHECK_ALLOWED_URLS} from '../config'
 export function my_profile(app: Hono) {
 
 app.get('/api/me', async (c) => {
+  let dbtest;
+    try {
+      dbtest = c.env.DB
+      if (!db) {
+        return c.json({ error: 'Сайт временно отключен, на обновление' }, 503)
+      }
+    } catch {
+      return c.json({ error: 'Сайт временно отключен, на обновление' }, 503)
+    }
   try {
     const token = getTokenFromCookie(c)
     if (!token) {

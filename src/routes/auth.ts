@@ -1,10 +1,13 @@
 import { Hono } from 'hono'
 import { sha256 } from 'hono/utils/crypto'
 import { sign, verify } from 'hono/jwt'
+import { randomBytes } from 'crypto'
 
 const JWT_ALG = 'HS256'
 
 const SimpleRegistration: boolean = false 
+
+const TokenExpiresDay: number = 7
 
 function getTokenFromCookie(c: any): string | null {
   const cookie = c.req.header('Cookie')
@@ -64,16 +67,18 @@ export function auth(app: Hono) {
       if (existing) {
         return c.json({ error: 'User already exists' }, 400)
       }
-      const passHash = await sha256(pass)
+
+      const salt = randomBytes(16).toString('hex')
+      const passHash = await sha256(pass + salt)
       const now = new Date().toISOString()
       await c.env.DB.prepare(
-        'INSERT INTO users (login, pass_hash, google_id, username, created_at) VALUES (?, ?, ?, ?, ?)'
-      ).bind(login, passHash, null, null, now).run()
+        'INSERT INTO users (login, pass_hash, google_id, username, created_at, salt) VALUES (?, ?, ?, ?, ?, ?)'
+      ).bind(login, passHash, null, null, now, salt).run()
       const user = await c.env.DB.prepare('SELECT * FROM users WHERE login = ?').bind(login).first()
       await c.env.DB.prepare('UPDATE users SET username = ? WHERE id = ?').bind(`User${user.id}`, user.id).run()
       const token = await sign({
         id: user.id,
-        exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30
+        exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * TokenExpiresDay
       }, c.env.JWT_SECRET, JWT_ALG)
       setAuthCookie(c, token)
       return c.json({ success: true })
@@ -83,34 +88,47 @@ export function auth(app: Hono) {
     }
   })
 
-  app.post('/api/login', async (c) => {
-    try {
-      const { login, pass, turnstileToken } = await c.req.json()
-      if (!login || !pass || !turnstileToken) {
-        return c.json({ error: 'Missing required fields' }, 400)
-      }
-      const isHuman = await verifyTurnstile(turnstileToken, c.env.TURNSTILE_SECRET)
-      if (!isHuman) {
-        return c.json({ error: 'Invalid captcha' }, 400)
-      }
-      const passHash = await sha256(pass)
-      const user = await c.env.DB.prepare(
-        'SELECT * FROM users WHERE login = ? AND pass_hash = ? AND google_id IS NULL'
-      ).bind(login, passHash).first()
-      if (!user) {
-        return c.json({ error: 'Invalid credentials or account uses Google login' }, 401)
-      }
-      const token = await sign({
-        id: user.id,
-        exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30
-      }, c.env.JWT_SECRET, JWT_ALG)
-      setAuthCookie(c, token)
-      return c.json({ success: true })
-    } catch (error) {
-      console.error(error)
-      return c.json({ error: 'Login failed' }, 500)
+app.post('/api/login', async (c) => {
+  try {
+    const { login, pass, turnstileToken } = await c.req.json()
+    if (!login || !pass || !turnstileToken) {
+      return c.json({ error: 'Missing required fields' }, 400)
     }
-  })
+    const isHuman = await verifyTurnstile(turnstileToken, c.env.TURNSTILE_SECRET)
+    if (!isHuman) {
+      return c.json({ error: 'Invalid captcha' }, 400)
+    }
+
+    const user = await c.env.DB.prepare(
+      'SELECT * FROM users WHERE login = ? AND google_id IS NULL'
+    ).bind(login).first()
+
+    if (!user) {
+      return c.json({ error: 'Invalid credentials or account uses Google login' }, 401)
+    }
+
+    // хэш
+    let passHash;
+    if (user.salt){
+      passHash = await sha256(pass + user.salt)
+    } else {
+      passHash = await sha256(pass)
+    }
+    if (passHash !== user.pass_hash) {
+      return c.json({ error: 'Invalid credentials' }, 401)
+    }
+
+    const token = await sign({
+      id: user.id,
+      exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * TokenExpiresDay
+    }, c.env.JWT_SECRET, JWT_ALG)
+    setAuthCookie(c, token)
+    return c.json({ success: true })
+  } catch (error) {
+    console.error(error)
+    return c.json({ error: 'Login failed' }, 500)
+  }
+})
 
   app.post('/api/logout', async (c) => {
     clearAuthCookie(c)
@@ -158,7 +176,7 @@ export function auth(app: Hono) {
 
         const token = await sign({
           id: user.id,
-          exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30
+          exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * TokenExpiresDay
         }, c.env.JWT_SECRET, JWT_ALG)
         setAuthCookie(c, token)
         return c.json({ success: true })
@@ -169,7 +187,7 @@ export function auth(app: Hono) {
         }
         const token = await sign({
           id: user.id,
-          exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30
+          exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * TokenExpiresDay
         }, c.env.JWT_SECRET, JWT_ALG)
         setAuthCookie(c, token)
         return c.json({ success: true })
@@ -213,8 +231,8 @@ export function auth(app: Hono) {
 
 
     await c.env.DB.prepare(
-      'UPDATE users SET google_id = ?, login = ?, pass_hash = ? WHERE id = ?'
-    ).bind(googleId, null, null, payload.id).run()
+      'UPDATE users SET google_id = ?, login = ?, pass_hash = ?, salt = ? WHERE id = ?'
+    ).bind(googleId, null, null, null, payload.id).run()
 
     const updatedUser = await c.env.DB.prepare(
       'SELECT * FROM users WHERE id = ?'
@@ -222,7 +240,7 @@ export function auth(app: Hono) {
 
     const newToken = await sign({
       id: updatedUser.id,
-      exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30
+      exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * TokenExpiresDay
     }, c.env.JWT_SECRET, JWT_ALG)
 
     setAuthCookie(c, newToken)

@@ -4,6 +4,8 @@ import { getTokenFromCookie, verifyCookie } from '../utils/cookie'
 export function projects(app: Hono) {
 app.get('/api/projects', async (c) => {
   try {
+    c.header('Cache-Control', 'public, max-age=10')
+
     const sort = c.req.query('sort') || 'new'
     const limit = parseInt(c.req.query('limit') || '20')
     const page = parseInt(c.req.query('page') || '1')

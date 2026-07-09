@@ -4,6 +4,7 @@ import { getTokenFromCookie, verifyCookie } from '../utils/cookie'
 export function entertainment(app: Hono) {
   app.get('/api/entertainment', async (c) => {
     try {
+      c.header('Cache-Control', 'public, max-age=10')
       const sort = c.req.query('sort') || 'new'
       const page = parseInt(c.req.query('page') || '1')
       const limit = parseInt(c.req.query('limit') || '20')

@@ -56,7 +56,7 @@ app.post('/api/create/project', async (c) => {
       ).bind(payload.id).first()
 
       if (count.cnt >= limitPerMinute) {
-        return c.json({ error: 'Лимит создания проектов исчерпан' }, 429)
+        return c.json({ error: 'Подождите немного' }, 429)
       }
     }
 
