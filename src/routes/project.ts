@@ -707,7 +707,7 @@ app.put('/api/project/:id', async (c) => {
         return c.json({ error: 'Forbidden' }, 403)
       }
       if (user?.admin > 1 && project.user_id !== payload.id) {
-
+/*
       const { turnstileToken } = await c.req.json()
 
       if (!turnstileToken) {
@@ -718,7 +718,7 @@ app.put('/api/project/:id', async (c) => {
       if (!isHuman) {
         return c.json({ error: 'Invalid captcha' }, 400)
       }
-
+*/
       const banned = await c.env.DB.prepare(
           'SELECT * FROM admin_ban WHERE user_id = ?'
         ).bind(payload.id).first()

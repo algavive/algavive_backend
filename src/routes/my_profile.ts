@@ -8,7 +8,7 @@ app.get('/api/me', async (c) => {
   let dbtest;
     try {
       dbtest = c.env.DB
-      if (!db) {
+      if (!dbtest) {
         return c.json({ error: 'Сайт временно отключен, на обновление' }, 503)
       }
     } catch {
