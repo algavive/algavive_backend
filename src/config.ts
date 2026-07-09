@@ -21,7 +21,7 @@ export function CHECK_ALLOWED_URLS(c: any, url: string): true | Response {
     return true;
   }
   
-  if (!url.trim().startsWith('/')) {
+  if (!url.trim().startsWith('http')) {
     return true;
   }
 

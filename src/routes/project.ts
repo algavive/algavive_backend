@@ -505,8 +505,8 @@ app.put('/api/project/:id', async (c) => {
     const id = parseInt(c.req.param('id'))
     const { title, description, content, imageUrl } = await c.req.json()
 
-    const check = CHECK_ALLOWED_URLS(c, content);
-    if (check !== true) return check;
+    /*const check = CHECK_ALLOWED_URLS(c, content);
+    if (check !== true) return check;*/
 
     const check2 = CHECK_ALLOWED_URLS(c, imageUrl);
     if (check2 !== true) return check2;
@@ -523,26 +523,33 @@ app.put('/api/project/:id', async (c) => {
     //&& !(payload.admin === 1 || payload.admin === 2)
     let finalContent = content
 
-    if (content !== undefined && content !== null) {
-      if (typeof content === 'string') {
-        if (content.length > 256) {
-          return c.json({ error: 'Content must be less than 256 characters' }, 400)
-        }
-        finalContent = content
-      } else if (Array.isArray(content)) {
-        if (content.length > 10) {
-          return c.json({ error: 'Maximum 10 media files allowed' }, 400)
-        }
-        for (const item of content) {
-          if (typeof item === 'string' && item.length > 256) {
-            return c.json({ error: 'Each media URL must be less than 256 characters' }, 400)
-          }
-        }
-        finalContent = JSON.stringify(content)
-      } else {
+if (content !== undefined && content !== null) {
+  if (typeof content === 'string') {
+    if (content.length > 256) {
+      return c.json({ error: 'Content must be less than 256 characters' }, 400)
+    }
+    const check = CHECK_ALLOWED_URLS(c, content);
+    if (check !== true) return check;
+    finalContent = content
+  } else if (Array.isArray(content)) {
+    if (content.length > 10) {
+      return c.json({ error: 'Maximum 10 media files allowed' }, 400)
+    }
+    for (const item of content) {
+      if (typeof item !== 'string') {
         return c.json({ error: 'Invalid content format' }, 400)
       }
+      if (item.length > 256) {
+        return c.json({ error: 'Each media URL must be less than 256 characters' }, 400)
+      }
+      const check = CHECK_ALLOWED_URLS(c, item);
+      if (check !== true) return check;
     }
+    finalContent = JSON.stringify(content)
+  } else {
+    return c.json({ error: 'Invalid content format' }, 400)
+  }
+}
 
     await c.env.DB.prepare(
       `UPDATE projects SET 
