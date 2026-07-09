@@ -50,23 +50,23 @@ export function project(app: Hono) {
 
       if (!project) return c.json({ error: 'Project not found' }, 404)
 
-      if (userId) {
-      const existingView = await c.env.DB.prepare(
-        'SELECT * FROM views WHERE projects_id = ? AND user_id = ?'
-      ).bind(id, userId).first()
-      if (!existingView) {
-        await c.env.DB.prepare(
-          'INSERT INTO views (projects_id, user_id) VALUES (?, ?)'
-        ).bind(id, userId).run()
-        await c.env.DB.prepare(
-          'UPDATE projects SET views_count = (SELECT COUNT(*) FROM views WHERE projects_id = ?) WHERE id = ?'
-        ).bind(id, id).run()
-      }
-    } else {
-      await c.env.DB.prepare(
-        'UPDATE projects SET views_count = views_count + 1 WHERE id = ?'
-      ).bind(id).run()
-    }
+if (userId) {
+  const existingView = await c.env.DB.prepare(
+    'SELECT * FROM views WHERE projects_id = ? AND user_id = ?'
+  ).bind(id, userId).first()
+  if (!existingView) {
+
+  await c.env.DB.prepare(
+    'INSERT INTO views (projects_id, user_id) VALUES (?, ?)'
+  ).bind(id, userId).run()
+  }
+}
+
+
+await c.env.DB.prepare(
+  'UPDATE projects SET views_count = (SELECT COUNT(*) FROM views WHERE projects_id = ?) WHERE id = ?'
+).bind(id, id).run()
+
 
       let isLiked = false
       let isOwner = false
