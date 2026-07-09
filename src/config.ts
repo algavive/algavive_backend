@@ -12,40 +12,21 @@ const ALLOWED_URLS = [
   'lh3.googleusercontent.com',
   'docs.google.com',
   'pst5.com',
-  'github.com',
-  'raw.githubusercontent.com'
+  'github.com'
 ] as const;
-
-function isAllowedHostname(hostname: string): boolean {
-  return ALLOWED_URLS.some(allowed => {
-
-    if (allowed === hostname) return true;
-
-    if (allowed.startsWith('.')) {
-      return hostname.endsWith(allowed);
-    }
-    return false;
-  });
-}
 
 export function CHECK_ALLOWED_URLS(c: any, url: string): true | Response {
   try {
-    if (!url || url.trim() === '') {
-      return true;
-    }
+  if (!url || url.trim() === '') {
+    return true;
+  }
+  
+  if (!url.trim().startsWith('/')) {
+    return true;
+  }
 
-    const trimmed = url.trim();
-
-    if (trimmed.startsWith('/')) {
-      return true;
-    }
-
-    let fullUrl = trimmed;
-    if (!/^https?:\/\//i.test(trimmed)) {
-      fullUrl = 'https://' + trimmed;
-    }
-
-    const parsed = new URL(fullUrl);
+  try {
+    const parsed = new URL(url);
     const hostname = parsed.hostname.toLowerCase();
 
     const pathname = parsed.pathname;
@@ -55,14 +36,17 @@ export function CHECK_ALLOWED_URLS(c: any, url: string): true | Response {
       return c.json({ error: 'SVG and WEBP files are not allowed' }, 403);
     }
 
-    if (!isAllowedHostname(hostname)) {
+    const isValid = ALLOWED_URLS.some(allowed => allowed.toLowerCase() === hostname);
+    if (!isValid) {
       return c.json({ error: 'URL domain not allowed' }, 403);
     }
-
     return true;
   } catch {
     return c.json({ error: 'Invalid URL format' }, 400);
   }
+} catch{
+  return true
+}
 }
 
 /*
