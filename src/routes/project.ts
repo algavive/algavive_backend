@@ -505,6 +505,18 @@ app.put('/api/project/:id', async (c) => {
     const id = parseInt(c.req.param('id'))
     const { title, description, content, imageUrl } = await c.req.json()
 
+    if (!title || title.length < 1 || title.length > 100) {
+      return c.json({ error: 'Название должно быть от 1 до 100 символов' }, 400)
+    }
+
+    if (imageUrl && imageUrl.length > 512) {
+      return c.json({ error: 'Ссылка на изображение должно от 1 до 512 символов' }, 400)
+    }
+
+    if (description && description.length > 1024) {
+      return c.json({ error: 'Описание должно от 1 до 1024 символов' }, 400)
+    }
+
     /*const check = CHECK_ALLOWED_URLS(c, content);
     if (check !== true) return check;*/
 

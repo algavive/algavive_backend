@@ -74,8 +74,8 @@ app.post('/api/create/project', async (c) => {
       return c.json({ error: 'Неверный тип проекта' }, 400)
     }
 
-    if (imageUrl && imageUrl.length > 512) {
-      return c.json({ error: 'Слишком длинная ссылка на изображение' }, 400)
+    if (imageUrl && imageUrl.length > 256) {
+      return c.json({ error: 'Ссылка на изображение должно от 1 до 256 символов' }, 400)
     }
 
     if (!turnstileToken) {
