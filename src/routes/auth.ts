@@ -7,7 +7,7 @@ const JWT_ALG = 'HS256'
 
 const SimpleRegistration: boolean = false 
 
-const TokenExpiresDay: number = 7
+const TokenExpiresDay: number = 30
 
 function getTokenFromCookie(c: any): string | null {
   const cookie = c.req.header('Cookie')
@@ -45,6 +45,8 @@ async function verifyTurnstile(token: string, secret: string) {
 async function verifyGoogleToken(token: string) {
   const res = await fetch('https://www.googleapis.com/oauth2/v3/tokeninfo?id_token=' + token)
   const data = await res.json()
+  if (data.aud !== c.env.GOOGLE_CLIENT_ID) throw new Error('Invalid audience');
+  if (data.iss !== 'https://accounts.google.com') throw new Error('Invalid issuer');
   if (!data.sub) throw new Error('Invalid Google token')
   return data
 }
