@@ -45,8 +45,6 @@ async function verifyTurnstile(token: string, secret: string) {
 async function verifyGoogleToken(token: string) {
   const res = await fetch('https://www.googleapis.com/oauth2/v3/tokeninfo?id_token=' + token)
   const data = await res.json()
-  if (data.aud !== c.env.GOOGLE_CLIENT_ID) throw new Error('Invalid audience');
-  if (data.iss !== 'https://accounts.google.com') throw new Error('Invalid issuer');
   if (!data.sub) throw new Error('Invalid Google token')
   return data
 }
@@ -148,6 +146,8 @@ app.post('/api/login', async (c) => {
         return c.json({ error: 'Invalid captcha' }, 400)
       }
       const googleData = await verifyGoogleToken(googleToken)
+      if (googleData.aud !== c.env.GOOGLE_CLIENT_ID) throw new Error('Invalid audience');
+      if (googleData.iss !== 'https://accounts.google.com') throw new Error('Invalid issuer');
       const googleId = googleData.sub
 
       if (mode === 'register') {
