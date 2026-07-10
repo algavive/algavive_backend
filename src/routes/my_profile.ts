@@ -9,10 +9,10 @@ app.get('/api/me', async (c) => {
     try {
       dbtest = c.env.DB
       if (!dbtest) {
-        return c.json({ error: 'Сайт временно отключен, на обновление' }, 503)
+        return c.json({ error: 'Сайт отключен' }, 503)
       }
     } catch {
-      return c.json({ error: 'Сайт временно отключен, на обновление' }, 503)
+      return c.json({ error: 'Сайт отключен' }, 503)
     }
   try {
     const token = getTokenFromCookie(c)
