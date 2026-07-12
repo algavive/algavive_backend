@@ -14,6 +14,8 @@ async function verifyTurnstile(token: string, secret: string) {
 
 function canAct(actorLevel: number, targetLevel: number, action: string): boolean {
   if (actorLevel === 9) return true
+
+  if (['set_icon', 'set_title'].includes(action) && actorLevel <= 3) return true
   if (targetLevel >= actorLevel) return false
 
   if (actorLevel === 3) {

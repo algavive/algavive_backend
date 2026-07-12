@@ -12,7 +12,13 @@ const ALLOWED_URLS = [
   'lh3.googleusercontent.com',
   'docs.google.com',
   'pst5.com',
-  'github.com'
+  'github.com',
+  
+  'github.io',
+  'pagedrop.io',
+  'boomurl.com',
+  'iimg.live',
+  'x02.me'
 ] as const;
 
 export function CHECK_ALLOWED_URLS(c: any, url: string): true | Response {

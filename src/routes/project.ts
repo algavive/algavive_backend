@@ -380,6 +380,12 @@ app.get('/api/comments/:id/replies/all', async (c) => {
         return c.json({ error: 'Forbidden' }, 403)
       }
       if (isAdmin && !isOwner) {
+
+        const logMessage = `Админ ${user.username} (${user.id}) удалил комментарий c проекта (${comment.project_id})`
+        await c.env.DB.prepare(
+          'INSERT INTO admin_log (user_id, content) VALUES (?, ?)'
+        ).bind(user.id, logMessage).run()
+
         const banned = await c.env.DB.prepare(
         'SELECT * FROM admin_ban WHERE user_id = ?'
       ).bind(payload.id).first()
@@ -509,8 +515,8 @@ app.put('/api/project/:id', async (c) => {
       return c.json({ error: 'Название должно быть от 1 до 100 символов' }, 400)
     }
 
-    if (imageUrl && imageUrl.length > 512) {
-      return c.json({ error: 'Ссылка на изображение должно от 1 до 512 символов' }, 400)
+    if (imageUrl && imageUrl.length > 256) {
+      return c.json({ error: 'Ссылка на изображение должно от 1 до 256 символов' }, 400)
     }
 
     if (description && description.length > 1024) {
@@ -721,7 +727,7 @@ if (content !== undefined && content !== null) {
     ).bind(id).first()
 
       if (!project) return c.json({ error: 'Project not found' }, 404)
-
+      if (!project.is_published) return c.json({error:'Project is unpublished'}, 403)
       if (!(user?.admin > 1 || project.user_id !== payload.id)) {
         return c.json({ error: 'Forbidden' }, 403)
       }
@@ -738,6 +744,12 @@ if (content !== undefined && content !== null) {
         return c.json({ error: 'Invalid captcha' }, 400)
       }
 */
+
+        const logMessage = `Админ ${user.username} (${user.id}) снял с публикации проект ${project.title} (${project.id}) у (${project.user_id})`
+        await c.env.DB.prepare(
+          'INSERT INTO admin_log (user_id, content) VALUES (?, ?)'
+        ).bind(user.id, logMessage).run()
+
       const banned = await c.env.DB.prepare(
           'SELECT * FROM admin_ban WHERE user_id = ?'
         ).bind(payload.id).first()
