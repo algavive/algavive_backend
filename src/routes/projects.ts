@@ -7,7 +7,7 @@ app.get('/api/projects', async (c) => {
     c.header('Cache-Control', 'public, max-age=10')
 
     const sort = c.req.query('sort') || 'new'
-    const limit = parseInt(c.req.query('limit') || '20')
+    const limit = parseInt(c.req.query('limit') || '50')
     const page = parseInt(c.req.query('page') || '1')
     const offset = (page - 1) * limit
 
@@ -50,11 +50,12 @@ app.get('/api/projects', async (c) => {
     ).bind(limit, offset).all()
 
     const total = await c.env.DB.prepare(
-      'SELECT COUNT(*) as count FROM projects WHERE is_published = 1'
+      'SELECT COUNT(*) as count FROM projects WHERE is_published = 1 AND (is_entertaiment IS NULL OR is_entertaiment = 0)'
     ).first()
 
     let projects = result.results || []
 
+    /*
     if (userId) {
       const likedProjects = await c.env.DB.prepare(
         'SELECT projects_id FROM likes WHERE user_id = ?'
@@ -67,6 +68,7 @@ app.get('/api/projects', async (c) => {
     } else {
       projects = projects.map((p: any) => ({ ...p, isLiked: false }))
     }
+    */
 
     return c.json({
       projects,

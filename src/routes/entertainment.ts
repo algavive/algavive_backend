@@ -52,6 +52,7 @@ export function entertainment(app: Hono) {
 
       let projects = result.results || []
 
+      /*
       if (userId) {
         const likedProjects = await c.env.DB.prepare(
           'SELECT projects_id FROM likes WHERE user_id = ?'
@@ -63,7 +64,7 @@ export function entertainment(app: Hono) {
         }))
       } else {
         projects = projects.map((p: any) => ({ ...p, isLiked: false }))
-      }
+      }*/
 
       return c.json({
         projects,

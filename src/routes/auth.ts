@@ -9,6 +9,8 @@ const SimpleRegistration: boolean = false
 
 const TokenExpiresDay: number = 30
 
+// Math.floor(Date.now() / 1000) + 60 * 60 * 24 * TokenExpiresDay
+
 function getTokenFromCookie(c: any): string | null {
   const cookie = c.req.header('Cookie')
   if (!cookie) return null
@@ -22,7 +24,7 @@ function setAuthCookie(c: any, token: string) {
   const sameSite = isProduction ? 'None' : 'Lax'
   const secure = isProduction ? 'Secure; ' : ''
   
-  c.header('Set-Cookie', `token=${token}; HttpOnly; ${secure}SameSite=${sameSite}; Path=/; Max-Age=2592000`)
+  c.header('Set-Cookie', `token=${token}; HttpOnly; ${secure}SameSite=${sameSite}; Path=/; Max-Age=${60 * 60 * 24 * TokenExpiresDay}`)
 }
 function clearAuthCookie(c: any) {
   const isProduction = c.req.url.includes('workers.dev') || c.req.url.includes('algavive')
@@ -56,6 +58,13 @@ export function auth(app: Hono) {
       if (!login || !pass || !turnstileToken) {
         return c.json({ error: 'Missing required fields' }, 400)
       }
+      if (!login || login.length < 1 || login.length > 50){
+        return c.json({ error: 'Логин должен быть от 1 до 50 символов' }, 400)
+      }
+      if (!pass || pass.length < 1 || pass.length > 50){
+        return c.json({ error: 'Пароль должен быть от 1 до 50 символов' }, 400)
+      }
+
       const isHuman = await verifyTurnstile(turnstileToken, c.env.TURNSTILE_SECRET)
       if (!isHuman) {
         return c.json({ error: 'Invalid captcha' }, 400)
@@ -93,6 +102,12 @@ app.post('/api/login', async (c) => {
     const { login, pass, turnstileToken } = await c.req.json()
     if (!login || !pass || !turnstileToken) {
       return c.json({ error: 'Missing required fields' }, 400)
+    }
+    if (!login || login.length < 1 || login.length > 50){
+        return c.json({ error: 'Логин должен быть от 1 до 50 символов' }, 400)
+      }
+    if (!pass || pass.length < 1 || pass.length > 50){
+      return c.json({ error: 'Пароль должен быть от 1 до 50 символов' }, 400)
     }
     const isHuman = await verifyTurnstile(turnstileToken, c.env.TURNSTILE_SECRET)
     if (!isHuman) {
@@ -137,7 +152,7 @@ app.post('/api/login', async (c) => {
 
   app.post('/api/auth/google', async (c) => {
     try {
-      const { googleToken, turnstileToken, mode, login, password } = await c.req.json()
+      const { googleToken, turnstileToken, mode /*, login, password*/ } = await c.req.json()
       if (!googleToken || !turnstileToken || !mode) {
         return c.json({ error: 'Missing required fields' }, 400)
       }
@@ -159,6 +174,7 @@ app.post('/api/login', async (c) => {
         let loginToInsert = null
         let passHashToInsert = null
 
+        /*
         if (login && password) {
           const existingLogin = await c.env.DB.prepare('SELECT * FROM users WHERE login = ?').bind(login).first()
           if (existingLogin) {
@@ -166,7 +182,7 @@ app.post('/api/login', async (c) => {
           }
           loginToInsert = login
           passHashToInsert = await sha256(password)
-        }
+        }*/
 
         const now = new Date().toISOString()
         await c.env.DB.prepare(
