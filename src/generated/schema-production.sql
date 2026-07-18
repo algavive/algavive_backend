@@ -11,7 +11,7 @@ CREATE TABLE users (
   avatarUrl TEXT,
   userIcon TEXT,
   userTitle TEXT
-);
+, `salt` text NULL);
 CREATE TABLE users_api_limits (
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   /*api лимиты, действия за день, минуту*/
@@ -83,6 +83,17 @@ CREATE TABLE admin_ban(
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   user_id_who_baned INTEGER NOT NULL,
   duration TIMESTAMP
+);
+CREATE TABLE `trends` (
+  `project_id` integer NULL,
+  `is_day` integer NULL DEFAULT 0,
+  `is_week` integer NULL DEFAULT 0,
+  `is_month` integer NULL DEFAULT 0,
+  `updated_day` text NULL,
+  `updated_week` text NULL,
+  `updated_month` text NULL,
+  PRIMARY KEY (`project_id`),
+  CONSTRAINT `0` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
 );
 DELETE FROM sqlite_sequence;
 CREATE INDEX idx_limits_use_user_action_created ON users_api_limits_use(user_id, action, created_at);

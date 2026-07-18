@@ -10,7 +10,7 @@ export function entertainment(app: Hono) {
       const limit = parseInt(c.req.query('limit') || '20')
       const offset = (page - 1) * limit
 
-      let orderBy = 'p.created_at DESC'
+      let orderBy = 'p.publish_at DESC'
       if (sort === 'popular') {
         orderBy = 'p.likes_count DESC, p.views_count DESC'
       } else if (sort === 'discussed') {

@@ -11,7 +11,7 @@ app.get('/api/projects', async (c) => {
     const page = parseInt(c.req.query('page') || '1')
     const offset = (page - 1) * limit
 
-    let orderBy = 'p.created_at DESC'
+    let orderBy = 'p.publish_at DESC'
     if (sort === 'popular') {
       orderBy = 'p.likes_count DESC, p.views_count DESC'
     } else if (sort === 'discussed') {

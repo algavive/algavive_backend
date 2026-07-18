@@ -34,7 +34,7 @@ export function search(app: Hono) {
         return c.json({ users: users.results || [] })
       }
 
-      let orderBy = 'p.created_at DESC'
+      let orderBy = 'p.publish_at DESC'
       if (sort === 'popular') {
         orderBy = 'p.likes_count DESC, p.views_count DESC'
       } else if (sort === 'discussed') {

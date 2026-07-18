@@ -30,11 +30,12 @@ const FRONTEND_URL = (BACKDEV_MODE: boolean): string => {
 const app = new Hono<{ Bindings: Bindings }>()
 
 app.use('*', cors({
+  /*
   origin: (origin, c) => {
     const url = new URL(c.req.url)
     const BACKDEV_MODE = url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '0.0.0.0'
     return FRONTEND_URL(BACKDEV_MODE)
-  },
+  },*/
   allowHeaders: ['Content-Type'],
   credentials: true
 }))

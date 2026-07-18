@@ -70,6 +70,13 @@ app.post('/api/create/project', async (c) => {
     }
 
     const validTypes = ['Пост', 'Scratch', 'Видео', 'Web']
+
+    const user = await c.env.DB.prepare(
+      'SELECT admin FROM users WHERE id = ?'
+    ).bind(payload.id).first()
+    if (user.admin > 1) {
+      validTypes.push('RewardGiver') // не доделал
+    }
     if (!validTypes.includes(type)) {
       return c.json({ error: 'Неверный тип проекта' }, 400)
     }

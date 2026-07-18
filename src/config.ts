@@ -14,9 +14,8 @@ const ALLOWED_URLS = [
   'pst5.com',
   'github.com',
   
-  'github.io',
   'pagedrop.io',
-  'boomurl.com',
+  'boomurl.me',
   'iimg.live',
   'x02.me'
 ] as const;
@@ -29,6 +28,14 @@ export function CHECK_ALLOWED_URLS(c: any, url: string): true | Response {
   
   if (!url.trim().startsWith('http')) {
     return true;
+  }
+  /*
+  if (url.trim().contains('.github.io')){
+    return true
+  }*/
+
+  if (url.trim().startsWith('base64')){
+    return c.json({ error: 'base64 not allowed' }, 403);
   }
 
   try {

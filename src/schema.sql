@@ -48,7 +48,8 @@ CREATE TABLE projects (
   description TEXT,
   is_trends INTEGER NULL, /*0 или NULL - false(остается без трендов, для is_entertaiment они не могут в is_trend, занимать что-то выше нуля), 1 - тренды*/
   is_entertaiment INTEGER NULL, /*публикация в центр развлечений и при публикации сам по умолчанию*/
-  is_published INTEGER NOT NULL /*0 - не опубликован, 1 - опубликован(с параметрами is_trend и is_entertaiment)*/
+  is_published INTEGER NOT NULL, /*0 - не опубликован, 1 - опубликован(с параметрами is_trend и is_entertaiment)*/
+  publish_at TIMESTAMP NULL
 );
 
 CREATE TABLE comments (
@@ -77,6 +78,8 @@ CREATE TABLE views (
   UNIQUE(user_id, projects_id)
 );
 
+
+/**/
 CREATE TABLE trends (
   project_id INTEGER PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
   is_day INTEGER DEFAULT 0,
@@ -87,31 +90,22 @@ CREATE TABLE trends (
   updated_month TEXT
 );
 
-/*
-Лучше не буду трогать пока выпускаю демо релиз
 
 CREATE TABLE notifications (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  type TEXT NOT NULL,
+  type TEXT NOT NULL, 
   content TEXT,
   user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);*/
-
-/*
-Я придумал новые права, то есть типа модератор это 1, админ это 2, вице-админ это 3, а владелец 9.
-
-CREATE TABLE admin_permissions (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id INTEGER NOT NULL,
-  Дальше bollean значения
-  perm_delete_comments INTEGER NOT NULL DEFAULT 0,
-  perm_unpublish_projects INTEGER NOT NULL DEFAULT 0,
-  perm_ban_users INTEGER NOT NULL DEFAULT 0,
-  perm_gives_users_icons_and_titles INTEGER NOT NULL DEFAULT 0,
-  perm_publish_entertaiment INTEGER NOT NULL DEFAULT 0
 );
-*/
+
+CREATE TABLE reward_giver (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 
 CREATE TABLE admin_log( /*Очищаться будет каждый день, будет только касаться всего, кроме perm_publish_entertaiment*/
   id INTEGER PRIMARY KEY AUTOINCREMENT,

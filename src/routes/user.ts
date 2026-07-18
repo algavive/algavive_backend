@@ -38,7 +38,7 @@ export function user(app: Hono) {
       const offset = (page - 1) * limit
 
       const sort = c.req.query('sort') || 'new'
-      let orderBy = 'p.created_at DESC'
+      let orderBy = 'p.publish_at DESC'
       if (sort === 'popular') {
         orderBy = 'p.likes_count DESC, p.views_count DESC'
       } else if (sort === 'discussed') {

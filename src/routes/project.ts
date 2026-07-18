@@ -657,7 +657,7 @@ if (content !== undefined && content !== null) {
       ).bind(payload.id).first()
 
       await c.env.DB.prepare(
-        'UPDATE projects SET is_published = 1, is_trends = 0 WHERE id = ?'
+        'UPDATE projects SET is_published = 1, publish_at = CURRENT_TIMESTAMP, is_trends = 0 WHERE id = ?'
       ).bind(id).run()
 
       return c.json({ success: true })
@@ -700,7 +700,7 @@ if (content !== undefined && content !== null) {
       }
 
       await c.env.DB.prepare(
-        'UPDATE projects SET is_published = 1, is_entertaiment = 1 WHERE id = ?'
+        'UPDATE projects SET is_published = 1, publish_at = CURRENT_TIMESTAMP, is_entertaiment = 1 WHERE id = ?'
       ).bind(id).run()
 
       return c.json({ success: true })
