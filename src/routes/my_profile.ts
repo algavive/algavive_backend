@@ -205,4 +205,97 @@ app.post("/api/change/username", async (c) => {
 
     	return c.json({ success: true }, 200)
 	})
+
+  //REWARD GIVERS
+  app.post('/api/change/reward/icon', async(c) => {
+  try {
+    const {projectId} = await c.req.json()
+    const token = getTokenFromCookie(c)
+    if (!token) {
+      return c.json({ error: 'Unauthorized' }, 401)
+    }
+
+    const payload = await verifyCookie(token, c)
+
+    if (projectId==="null") {
+      await c.env.DB.prepare(
+          'UPDATE users SET userIcon = NULL WHERE id = ?'
+      ).bind(payload.id).run()
+      return c.json({ success: true }, 200)
+    }
+
+    const banned = await c.env.DB.prepare(
+      'SELECT * FROM admin_ban WHERE user_id = ?'
+    ).bind(payload.id).first()
+    if(banned) { return c.json({error: 'You banned'},403)}
+
+    let projectIdInt = parseInt(projectId)
+
+    if (!projectIdInt) return c.json({ error: 'Invalid project ID' }, 400)
+
+    const project = await c.env.DB.prepare(
+      `SELECT content, is_published FROM projects WHERE id = ?`
+    ).bind(projectIdInt).first()
+
+    const rewardGiverCheck = await c.env.DB.prepare(
+      `SELECT id FROM reward_giver WHERE project_id = ? AND user_id = ?`
+    ).bind(projectIdInt, payload.id).first()
+
+    if (!project) return c.json({ error: 'Project not found' }, 404)
+    if (project.is_published === 0) return c.json({ error: 'Project not found' }, 404)
+    if (!rewardGiverCheck) { 
+      return c.json({error: 'У вас нету такой награды'}, 403)
+    } else {
+      await c.env.DB.prepare(
+        'UPDATE users SET userIcon = ? WHERE id = ?'
+      ).bind(project.content, payload.id).run()
+      return c.json({ success: true }, 200)
+    }
+  } catch(error){
+    console.error(error)
+    return c.json({error:'Failed to change reward icon'},500)
+  }
+  })
+  app.post('/api/change/reward/title', async(c) => {
+  try {
+    const {projectId} = await c.req.json()
+    const token = getTokenFromCookie(c)
+    if (!token) {
+      return c.json({ error: 'Unauthorized' }, 401)
+    }
+    const payload = await verifyCookie(token, c)
+    if (projectId==="null") {
+      await c.env.DB.prepare(
+          'UPDATE users SET userTitle = NULL WHERE id = ?'
+      ).bind(payload.id).run()
+      return c.json({ success: true }, 200)
+    }
+    const banned = await c.env.DB.prepare(
+      'SELECT * FROM admin_ban WHERE user_id = ?'
+    ).bind(payload.id).first()
+    if(banned) { return c.json({error: 'You banned'},403)}
+
+    let projectIdInt = parseInt(projectId)
+    if (!projectIdInt) return c.json({ error: 'Invalid project ID' }, 400)
+    const project = await c.env.DB.prepare(
+      `SELECT content, is_published FROM projects WHERE id = ?`
+    ).bind(projectIdInt).first()
+    const rewardGiverCheck = await c.env.DB.prepare(
+      `SELECT id FROM reward_giver WHERE project_id = ? AND user_id = ?`
+    ).bind(projectIdInt, payload.id).first()
+    if (!project) return c.json({ error: 'Project not found' }, 404)
+    if (project.is_published === 0) return c.json({ error: 'Project not found' }, 404)
+    if (!rewardGiverCheck) { 
+      return c.json({error: 'У вас нету такой награды'}, 403)
+    } else {
+      await c.env.DB.prepare(
+        'UPDATE users SET userTitle = ? WHERE id = ?'
+      ).bind(project.content, payload.id).run()
+      return c.json({ success: true }, 200)
+    }
+  } catch(error){
+    console.error(error)
+    return c.json({error:'Failed to change reward icon'},500)
+  }
+  })
 }

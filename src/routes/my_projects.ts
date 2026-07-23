@@ -75,7 +75,8 @@ app.post('/api/create/project', async (c) => {
       'SELECT admin FROM users WHERE id = ?'
     ).bind(payload.id).first()
     if (user.admin > 1) {
-      validTypes.push('RewardGiver') // не доделал
+      validTypes.push('RewardGiverIcon')
+      validTypes.push('RewardGiverTitle')
     }
     if (!validTypes.includes(type)) {
       return c.json({ error: 'Неверный тип проекта' }, 400)

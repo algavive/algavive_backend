@@ -81,4 +81,54 @@ export function user(app: Hono) {
       return c.json({ error: 'Failed to load user projects' }, 500)
     }
   })
+
+  app.get('/api/user/:id/rewards', async (c) => {
+    try {
+      const id = parseInt(c.req.param('id'))
+      if (!id) return c.json({ error: 'Invalid user ID' }, 400)
+
+      const page = parseInt(c.req.query('page') || '1')
+      const limit = parseInt(c.req.query('limit') || '28')
+      const offset = (page - 1) * limit
+
+      const result = await c.env.DB.prepare(`
+        SELECT 
+          p.id,
+          p.title,
+          p.type,
+          p.imageUrl,
+          p.likes_count as likes,
+          p.comments_count as comments,
+          p.views_count as views,
+          u.username as author,
+          u.avatarUrl as authorProfile,
+          u.userIcon as authorIcon,
+          u.userTitle as authorTitle
+        FROM reward_giver rg
+        JOIN projects p ON rg.project_id = p.id
+        LEFT JOIN users u ON p.user_id = u.id
+        WHERE rg.user_id = ? AND p.is_published = 1
+        ORDER BY p.publish_at DESC
+        LIMIT ? OFFSET ?
+      `).bind(id, limit, offset).all()
+
+      const total = await c.env.DB.prepare(`
+        SELECT COUNT(*) as count 
+        FROM reward_giver rg
+        JOIN projects p ON rg.project_id = p.id
+        WHERE rg.user_id = ? AND p.is_published = 1
+      `).bind(id).first()
+
+      return c.json({
+        projects: result.results || [],
+        total: total?.count || 0,
+        page,
+        limit,
+        totalPages: Math.ceil((total?.count || 0) / limit)
+      })
+    } catch (error) {
+      console.error(error)
+      return c.json({ error: 'Failed to load rewards' }, 500)
+    }
+  })
 }

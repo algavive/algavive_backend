@@ -170,6 +170,17 @@ app.post('/api/project/:id/comments', async (c) => {
     }
 
     const id = parseInt(c.req.param('id'))
+    try {
+      const pub = await c.env.DB.prepare(`
+        SELECT is_published FROM projects WHERE id = ?
+      `).bind(id).first()
+      console.log(pub)
+      if (pub.is_published === 0){
+        return c.json({error:"Нельзя писать комментарии в не опубликованном проекте"}, 403)
+      }
+    } catch (error) {
+      c.json({error:"Этого проекта не существует"}, 403)
+    }
     const { content, turnstileToken } = await c.req.json()
 
     if (!turnstileToken) {
@@ -446,6 +457,22 @@ app.post('/api/comments/:id/reply', async (c) => {
     }
 
     const parentId = parseInt(c.req.param('id'))
+    
+    try {
+      const xd = await c.env.DB.prepare(`
+        SELECT project_id FROM comments WHERE id = ?
+      `).bind(parentId).first()
+      const pub = await c.env.DB.prepare(`
+        SELECT is_published FROM projects WHERE id = ?
+      `).bind(xd.project_id).first()
+
+      if (pub.is_published === 0){
+        return c.json({error:"Нельзя писать ответы в не опубликованном проекте"}, 403)
+      }
+    } catch (error) {
+      c.json({error:"Этого проекта не существует"}, 403)
+    }
+
     const { content, turnstileToken } = await c.req.json()
 
     if (!turnstileToken) {
@@ -657,8 +684,11 @@ if (content !== undefined && content !== null) {
       ).bind(payload.id).first()
 
       await c.env.DB.prepare(
-        'UPDATE projects SET is_published = 1, publish_at = CURRENT_TIMESTAMP, is_trends = 0 WHERE id = ?'
+        'UPDATE projects SET is_published = 1, is_trends = 0 WHERE id = ?'
       ).bind(id).run()
+      await c.env.DB.prepare(
+        'UPDATE projects SET publish_at = CURRENT_TIMESTAMP WHERE id = ? AND publish_at IS NULL'
+      ).bind(id).run();
 
       return c.json({ success: true })
     } catch (error) {
@@ -766,4 +796,51 @@ if (content !== undefined && content !== null) {
       return c.json({ error: 'Failed to unpublish project' }, 500)
     }
   })
+
+  //REWARD GIVERS
+  app.get('/api/project/:id/rewards', async (c) => {
+  try {
+    const projectId = parseInt(c.req.param('id'))
+    if (!projectId) return c.json({ error: 'Invalid project ID' }, 400)
+
+    const page = parseInt(c.req.query('page') || '1')
+    const limit = parseInt(c.req.query('limit') || '5')
+    const offset = (page - 1) * limit
+
+    const project = await c.env.DB.prepare('SELECT is_published FROM projects WHERE id = ?').bind(projectId).first()
+    if (!project) return c.json({ error: 'Project not found' }, 404)
+    if (project.is_published === 0) return c.json({ error: 'Project not found' }, 404)
+
+    const users = await c.env.DB.prepare(`
+      SELECT 
+        u.id,
+        u.username as name,
+        u.avatarUrl,
+        u.userIcon as rankIcon,
+        u.userTitle as rankTitle
+      FROM reward_giver rg
+      JOIN users u ON rg.user_id = u.id
+      WHERE rg.project_id = ?
+      ORDER BY rg.created_at DESC
+      LIMIT ? OFFSET ?
+    `).bind(projectId, limit, offset).all()
+
+    const total = await c.env.DB.prepare(`
+      SELECT COUNT(*) as count 
+      FROM reward_giver 
+      WHERE project_id = ?
+    `).bind(projectId).first()
+
+    return c.json({
+      users: users.results || [],
+      total: total?.count || 0,
+      page,
+      limit,
+      totalPages: Math.ceil((total?.count || 0) / limit)
+    })
+  } catch (error) {
+    console.error(error)
+    return c.json({ error: 'Failed to load project rewards' }, 500)
+  }
+})
 }

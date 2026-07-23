@@ -1,4 +1,3 @@
-// src/routes/search.ts
 import { Hono } from 'hono'
 
 export function search(app: Hono) {

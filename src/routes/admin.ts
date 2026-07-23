@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { getTokenFromCookie, verifyCookie } from '../utils/cookie'
-import {CHECK_ALLOWED_URLS} from '../config'
+import { CHECK_ALLOWED_URLS } from '../config'
 
 async function verifyTurnstile(token: string, secret: string) {
   const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
@@ -15,20 +15,20 @@ async function verifyTurnstile(token: string, secret: string) {
 function canAct(actorLevel: number, targetLevel: number, action: string): boolean {
   if (actorLevel === 9) return true
 
-  if (['set_icon', 'set_title'].includes(action) && actorLevel <= 3) return true
+  if (['set_icon', 'set_title', 'add_rewardgiver', 'remove_rewardgiver'].includes(action) && actorLevel <= 3) return true
   if (targetLevel >= actorLevel) return false
 
   if (actorLevel === 3) {
     if (action === 'set_role' && targetLevel <= 2) return true
     if (action === 'remove_role' && targetLevel <= 2 && targetLevel > 0) return true
-    if (['ban', 'unban', 'set_icon', 'set_title', 'reset_profile'].includes(action)) return true
+    if (['ban', 'unban', 'set_icon', 'set_title', 'reset_profile', 'add_rewardgiver', 'remove_rewardgiver'].includes(action)) return true
     return false
   }
 
   if (actorLevel === 2) {
     if (action === 'set_role' && targetLevel === 1) return true
     if (action === 'remove_role' && targetLevel === 1) return true
-    if (['ban', 'unban', 'set_icon', 'set_title', 'reset_profile'].includes(action)) return true
+    if (['ban', 'unban', 'set_icon', 'set_title', 'reset_profile', 'add_rewardgiver', 'remove_rewardgiver'].includes(action)) return true
     return false
   }
 
@@ -188,6 +188,40 @@ export function admin(app: Hono) {
             'UPDATE users SET username = ?, avatarUrl = NULL, description = NULL WHERE id = ?'
           ).bind(defaultUsername, targetUserId).run()
           logMessage = `Админ ${actor.username} (${actor.id}) сбросил профиль у ${target.username} (${target.id})`
+          break
+        }
+        case 'add_rewardgiver': {
+          console.log(value)
+          const projectId = parseInt(value)
+          if (isNaN(projectId)) return c.json({ error: 'Invalid project ID' }, 400)
+          const project = await c.env.DB.prepare('SELECT id, is_published, type FROM projects WHERE id = ?').bind(projectId).first()
+
+          const user_check = await c.env.DB.prepare('SELECT project_id FROM reward_giver WHERE user_id = ? AND project_id = ?').bind(targetUserId, projectId).first()
+
+          if (!project.type.startsWith('RewardGiver')) return c.json({error:'Проект должен быть в типе RewardGiverIcon или RewardGiverTitle'}, 403)
+
+          if (user_check) return c.json({error:'У пользователя есть ревард гивер'}, 403)
+
+          if (project.is_published === 0) return c.json({error:'Проект должен быть опубликован!'}, 403)
+
+          if (!project) return c.json({ error: 'Project not found' }, 404)
+          await c.env.DB.prepare(
+            'INSERT INTO reward_giver (user_id, project_id) VALUES (?, ?)'
+          ).bind(targetUserId, projectId).run()
+          logMessage = `Админ ${actor.username} (${actor.id}) выдал ревард-гивер (проект ${projectId}) пользователю ${target.username} (${target.id})`
+          break
+        }
+        case 'remove_rewardgiver': {
+          const projectId = parseInt(value)
+          /*if (isNaN(projectId)) {
+            await c.env.DB.prepare('DELETE FROM reward_giver WHERE user_id = ?').bind(targetUserId).run()
+            logMessage = `Админ ${actor.username} (${actor.id}) снял все ревард-гиверы у ${target.username} (${target.id})`
+          } else {*/
+            await c.env.DB.prepare(
+              'DELETE FROM reward_giver WHERE user_id = ? AND project_id = ?'
+            ).bind(targetUserId, projectId).run()
+            logMessage = `Админ ${actor.username} (${actor.id}) снял ревард-гивер (проект ${projectId}) у ${target.username} (${target.id})`
+          /*}*/
           break
         }
         default:
