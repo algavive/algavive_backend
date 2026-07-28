@@ -1,6 +1,77 @@
+/*Обновлённый алгоритм*/
 import { Hono } from 'hono'
 
-const LIMIT = 15
+const LIMIT = 10
+
+export function trends(app: Hono) {
+  app.get('/api/trends', async (c) => {
+    try {
+      c.header('Cache-Control', 'public, max-age=10')
+
+      const period = c.req.query('period') || 'day'
+      
+      let dateCondition: string
+      switch (period) {
+        case 'week':
+          dateCondition = "created_at >= datetime('now', '-7 days')"
+          break
+        case 'month':
+          dateCondition = "created_at >= datetime('now', '-30 days')"
+          break
+        default:
+          dateCondition = "created_at >= datetime('now', '-1 day')"
+          break
+      }
+
+      const query = `
+        SELECT 
+          p.id,
+          p.title,
+          p.type,
+          p.imageUrl,
+          p.likes_count as likes,
+          p.comments_count as comments,
+          p.views_count as views,
+          u.username as author,
+          u.avatarUrl as authorProfile,
+          u.userIcon as authorIcon,
+          u.userTitle as authorTitle,
+          (SELECT COUNT(*) 
+           FROM likes 
+           WHERE projects_id = p.id 
+             AND ${dateCondition}) as likes_period
+        FROM projects p
+        LEFT JOIN users u ON p.user_id = u.id
+        WHERE p.is_published = 1 
+          AND (p.is_entertaiment IS NULL OR p.is_entertaiment = 0)
+          -- Фильтр лайков
+          AND EXISTS (
+            SELECT 1 
+            FROM likes 
+            WHERE projects_id = p.id 
+              AND ${dateCondition}
+          )
+        ORDER BY likes_period DESC
+        LIMIT ${LIMIT}
+      `
+
+      const result = await c.env.DB.prepare(query).all()
+      
+      return c.json({ 
+        projects: result.results || [],
+        period: period
+      })
+    } catch (error) {
+      console.error('Trends error:', error)
+      return c.json({ error: 'Failed to load trends' }, 500)
+    }
+  })
+}
+
+/* Старый алгоритм
+import { Hono } from 'hono'
+
+const LIMIT = 10
 
 export function trends(app: Hono) {
   app.get('/api/trends', async (c) => {
@@ -101,3 +172,5 @@ export function trends(app: Hono) {
     }
   })
 }
+
+*/

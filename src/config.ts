@@ -8,12 +8,10 @@ const ALLOWED_URLS = [
   'files.catbox.moe',
   'i.ibb.co',
   'host.posty5.com',
-  'vercel.app',
   'lh3.googleusercontent.com',
   'docs.google.com',
   'pst5.com',
   'github.com',
-  
   'pagedrop.io',
   'boomurl.me',
   'iimg.live',
@@ -29,10 +27,13 @@ export function CHECK_ALLOWED_URLS(c: any, url: string): true | Response {
   if (!url.trim().startsWith('http')) {
     return true;
   }
-  /*
-  if (url.trim().contains('.github.io')){
+
+  if (url.trim().contains('.github.io') 
+    || url.trim().contains('.vercel.app') 
+    || url.trim().contains('.pages.dev') 
+    || url.trim().contains('.netlify.app')){
     return true
-  }*/
+  }
 
   if (url.trim().startsWith('base64')){
     return c.json({ error: 'base64 not allowed' }, 403);
