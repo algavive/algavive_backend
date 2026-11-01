@@ -14,7 +14,8 @@ app.get('/api/me', async (c) => {
     } catch {
       return c.json({ error: 'Сайт отключен' }, 503)
     }
-  if(c.env.GUESTMODE) return c.json({ error: 'Владелец включил гостевой режим'}, 503)
+  if(c.env.GUESTMODE) return c.json({ error: `Владелец включил гостевой режим(можно смотреть.лайкать проекты, 
+  предварительно заходить или регистрировать аккаунт)`} 503)
   try {
     const token = getTokenFromCookie(c)
     if (!token) {
@@ -83,6 +84,7 @@ if (userBanned && userBanned.duration !== 'always' && userBanned.duration !== '9
 })
 
 app.post("/api/change/username", async (c) => {
+    if(c.env.GUESTMODE) return c.json({ error: 'Guest Mode' }, 401)
   try {
     const { username } = await c.req.json()
 
@@ -158,6 +160,7 @@ app.post("/api/change/username", async (c) => {
 })
 
 	app.post('/api/change/description', async(c) =>{
+        if(c.env.GUESTMODE) return c.json({ error: 'Guest Mode' }, 401)
 		const {description} = await c.req.json()
 
 		const token = getTokenFromCookie(c)
@@ -181,6 +184,7 @@ app.post("/api/change/username", async (c) => {
     	return c.json({ success: true }, 200)
 	})
 	app.post('/api/change/avatarUrl', async(c) =>{
+        if(c.env.GUESTMODE) return c.json({ error: 'Guest Mode' }, 401)
 		const {avatarUrl} = await c.req.json()
 
     const check = CHECK_ALLOWED_URLS(c, avatarUrl);
@@ -209,6 +213,7 @@ app.post("/api/change/username", async (c) => {
 
   //REWARD GIVERS
   app.post('/api/change/reward/icon', async(c) => {
+      if(c.env.GUESTMODE) return c.json({ error: 'Guest Mode' }, 401)
   try {
     const {projectId} = await c.req.json()
     const token = getTokenFromCookie(c)
@@ -258,6 +263,7 @@ app.post("/api/change/username", async (c) => {
   }
   })
   app.post('/api/change/reward/title', async(c) => {
+      if(c.env.GUESTMODE) return c.json({ error: 'Guest Mode' }, 401)
   try {
     const {projectId} = await c.req.json()
     const token = getTokenFromCookie(c)

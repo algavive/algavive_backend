@@ -132,6 +132,7 @@ await c.env.DB.prepare(
   })
 
 app.post('/api/project/:id/comments', async (c) => {
+    if(c.env.GUESTMODE) return c.json({ error: 'Guest Mode' }, 401)
   try {
     const token = getTokenFromCookie(c)
     if (!token) return c.json({ error: 'Unauthorized' }, 401)
@@ -419,6 +420,7 @@ app.get('/api/comments/:id/replies/all', async (c) => {
   })
 
 app.post('/api/comments/:id/reply', async (c) => {
+    if(c.env.GUESTMODE) return c.json({ error: 'Guest Mode' }, 401)
   try {
     const token = getTokenFromCookie(c)
     if (!token) return c.json({ error: 'Unauthorized' }, 401)
@@ -530,6 +532,7 @@ app.post('/api/comments/:id/reply', async (c) => {
 })
 
 app.put('/api/project/:id', async (c) => {
+    if(c.env.GUESTMODE) return c.json({ error: 'Guest Mode' }, 401)
   try {
     const token = getTokenFromCookie(c)
     if (!token) return c.json({ error: 'Unauthorized' }, 401)
@@ -658,6 +661,7 @@ if (content !== undefined && content !== null) {
   })
 
   app.post('/api/project/:id/publish', async (c) => {
+      if(c.env.GUESTMODE) return c.json({ error: 'Guest Mode' }, 401)
     try {
       const token = getTokenFromCookie(c)
       if (!token) return c.json({ error: 'Unauthorized' }, 401)
@@ -698,6 +702,7 @@ if (content !== undefined && content !== null) {
   })
 
   app.post('/api/project/:id/publish-entertaiment', async (c) => {
+      if(c.env.GUESTMODE) return c.json({ error: 'Guest Mode' }, 401)
     try {
       const token = getTokenFromCookie(c)
       if (!token) return c.json({ error: 'Unauthorized' }, 401)

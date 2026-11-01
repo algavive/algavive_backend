@@ -24,6 +24,7 @@ app.post('/api/create/project', async (c) => {
     if (!token) {
       return c.json({ error: 'Unauthorized' }, 401)
     }
+    if(c.env.GUESTMODE) return c.json({ error: 'Guest Mode' }, 401)
 
     const payload = await verifyCookie(token, c)
 
