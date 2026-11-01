@@ -14,8 +14,7 @@ app.get('/api/me', async (c) => {
     } catch {
       return c.json({ error: 'Сайт отключен' }, 503)
     }
-  if(c.env.GUESTMODE) return c.json({ error: `Владелец включил гостевой режим(можно смотреть.лайкать проекты, 
-  предварительно заходить или регистрировать аккаунт)`} 503)
+  if(c.env.GUESTMODE) return c.json({ error: `Владелец включил гостевой режим`}, 503)
   try {
     const token = getTokenFromCookie(c)
     if (!token) {
