@@ -19,6 +19,7 @@ type Bindings = {
   TURNSTILE_SECRET: string
   JWT_SECRET: string
   SIMPREG?: boolean
+  GUESTMODE?: boolean
 }
 
 const FRONTEND_URL = (BACKDEV_MODE: boolean): string => {
